@@ -114,52 +114,50 @@ def send_pixel(event, status_override=None):
     db.session.commit()
     return (status, latency, None)
 
+from flask import request as flask_request  # add near other imports
+
 def send_capi(event):
     if not capi_enabled() or chaos_drop():
         return ("dropped", 0, None)
+
+    # --- NEW: capture UA/IP (works in admin/manual; falls back in automation) ---
+    try:
+        ua = flask_request.headers.get("User-Agent", "")
+        ip = flask_request.headers.get("X-Forwarded-For", "") or (flask_request.remote_addr or "")
+        fbp = flask_request.cookies.get("_fbp")
+        fbc = flask_request.cookies.get("_fbc")
+    except RuntimeError:
+        ua = "Mozilla/5.0 (Server Automation)"
+        ip = "127.0.0.1"
+        fbp = None
+        fbc = None
+    if not ua:
+        ua = "Mozilla/5.0"
+
     url = f"https://graph.facebook.com/{Config.GRAPH_VER}/{Config.PIXEL_ID}/events"
     data = {
         "data": [{
             "event_name": event.get("event_name","?"),
             "event_time": int(time.time()),
             "event_id": event.get("event_id"),
-            "custom_data": {"currency": event.get("currency","USD"), "value": event.get("value",0)},
-            "action_source": "website"
+            "action_source": "website",
+            "event_source_url": (Config.BASE_URL or "https://example.com"),   # NEW
+            "user_data": {                                                   # NEW
+                "client_user_agent": ua,
+                "client_ip_address": ip,
+                **({"fbp": fbp} if fbp else {}),
+                **({"fbc": fbc} if fbc else {}),
+            },
+            "custom_data": {
+                "currency": event.get("currency","USD"),
+                "value": event.get("value", 0)
+            }
         }]
     }
     if Config.TEST_EVENT_CODE:
         data["test_event_code"] = Config.TEST_EVENT_CODE
-    start = time.time()
-    err = None
-    status = "ok"
-    try:
-        # Respect rate limit
-        while not capi_bucket.take():
-            time.sleep(0.02)
-        # Make real call only if creds exist; otherwise dry-run
-        if Config.PIXEL_ID and Config.ACCESS_TOKEN:
-            resp = requests.post(url, params={"access_token": Config.ACCESS_TOKEN}, json=data, timeout=6)
-            ok = 200 <= resp.status_code < 300
-            status = "ok" if ok else f"http_{resp.status_code}"
-            if not ok:
-                err = resp.text[:1000]
-        else:
-            status = "dry_run"
-    except Exception as e:
-        status = "error"
-        err = str(e)[:1000]
-    latency = int((time.time()-start)*1000)
-    ev = EventLog(ts=datetime.utcnow(), channel="capi", event_name=event.get("event_name","?"),
-                  event_id=event.get("event_id","?"), status=status, latency_ms=latency,
-                  payload=json.dumps(data), error=err)
-    db.session.add(ev)
-    c = Counters.get_or_create()
-    c.capi += 1 if status in ("ok","dry_run") else 0
-    dup = EventLog.query.filter_by(event_id=event.get("event_id","?"), channel="pixel").first()
-    if dup:
-        c.dedup += 1
-    db.session.commit()
-    return (status, latency, err)
+    ...
+
 
 # -------------------- Dashboard --------------------
 @admin_bp.route("/")
