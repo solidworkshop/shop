@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Event Logs</h1>
+<div class="table-responsive">
+  <table class="table table-sm">
+    <thead><tr><th>Time</th><th>Channel</th><th>Event</th><th>event_id</th><th>Status</th><th>Latency</th></tr></thead>
+    <tbody>
+      {% for r in logs %}
+      <tr>
+        <td>{{ r.ts }}</td>
+        <td>{{ r.channel }}</td>
+        <td>{{ r.event_name }}</td>
+        <td class="text-truncate" style="max-width:320px">{{ r.event_id }}</td>
+        <td>{{ r.status }}</td>
+        <td>{{ r.latency_ms }}ms</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

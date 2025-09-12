@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="mb-3">Admin Dashboard</h1>
+<div class="row g-3">
+  <div class="col-md-3">
+    <div class="card">
+      <div class="card-body">
+        <div class="d-flex justify-content-between">
+          <div>
+            <div class="text-muted small">Build</div>
+            <div class="fw-bold">{{ build }}</div>
+          </div>
+          <div class="text-end">
+            <div class="text-muted small">Graph</div>
+            <div class="fw-bold">{{ graph }}</div>
+          </div>
+        </div>
+        <hr>
+        <div class="d-flex justify-content-between">
+          <div>Pixel</div><div class="fw-bold">{{ pixel }}</div>
+        </div>
+        <div class="d-flex justify-content-between">
+          <div>CAPI</div><div class="fw-bold">{{ capi }}</div>
+        </div>
+        <hr>
+        <h6>Health</h6>
+        <div class="d-grid gap-2">
+          <button id="pixelCheck" class="btn btn-outline-secondary btn-sm">Run Pixel Check</button>
+          <div id="pixelCheckResult" class="small text-muted"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card mt-3">
+      <div class="card-body">
+        <h6>Master Switches</h6>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="pix" checked>
+          <label class="form-check-label" for="pix">Pixel Enabled</label>
+        </div>
+        <div class="form-check form-switch mt-2">
+          <input class="form-check-input" type="checkbox" id="capi" checked>
+          <label class="form-check-label" for="capi">CAPI Enabled</label>
+        </div>
+      </div>
+    </div>
+    <div class="card mt-3">
+      <div class="card-body">
+        <h6>Chaos</h6>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="chaos_drop">
+          <label class="form-check-label" for="chaos_drop">Drop events</label>
+        </div>
+        <div class="form-check form-switch mt-2">
+          <input class="form-check-input" type="checkbox" id="chaos_omit">
+          <label class="form-check-label" for="chaos_omit">Omit params</label>
+        </div>
+        <div class="form-check form-switch mt-2">
+          <input class="form-check-input" type="checkbox" id="chaos_malformed">
+          <label class="form-check-label" for="chaos_malformed">Malformed payloads</label>
+        </div>
+      </div>
+    </div>
+    <div class="card mt-3">
+      <div class="card-body">
+        <h6>Seed</h6>
+        <div class="input-group input-group-sm">
+          <input id="seed" class="form-control" placeholder="e.g. 42" value="{{ seed }}">
+          <button id="seedBtn" class="btn btn-outline-primary">Set</button>
+        </div>
+        <div class="small text-muted mt-1">Deterministic runs for automation and purchase values.</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-9">
+    <div class="card">
+      <div class="card-body">
+        <h6 class="mb-3">Counters</h6>
+        <div class="row text-center">
+          <div class="col"><div class="h2">{{ counters.pixel }}</div><div class="small text-muted">Pixel</div></div>
+          <div class="col"><div class="h2">{{ counters.capi }}</div><div class="small text-muted">CAPI</div></div>
+          <div class="col"><div class="h2">{{ counters.dedup }}</div><div class="small text-muted">Deduped</div></div>
+          <div class="col"><div class="h2">{{ '%.2f'|format(counters.margin_sum) }}</div><div class="small text-muted">Margin Σ</div></div>
+          <div class="col"><div class="h2">{{ '%.2f'|format(counters.pltv_sum) }}</div><div class="small text-muted">PLTV Σ</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card mt-3">
+      <div class="card-body">
+        <h6 class="mb-3">Automation</h6>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle" id="intervals">
+            <thead><tr><th>Event</th><th style="width:160px">Interval (s)</th></tr></thead>
+            <tbody>
+              {% for e,val in intervals.items() %}
+              <tr>
+                <td>{{ e }}</td>
+                <td><input class="form-control form-control-sm interval" data-key="interval_{{e}}" type="number" step="0.1" value="{{ '%.1f'|format(val) }}"></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="d-flex gap-2 align-items-end">
+          <button id="autoStart" class="btn btn-success">Start with Intervals</button>
+          <button id="autoStop" class="btn btn-danger">Stop All</button>
+          <button id="testBeacon" class="btn btn-outline-secondary">Send Test PageView</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mt-3">
+      <div class="card-body">
+        <h6 class="mb-2">Per-Event Toggles</h6>
+        <div class="row">
+          {% for e in events %}
+          <div class="col-6 col-md-4">
+            <div class="form-check form-switch">
+              <input class="form-check-input ev" type="checkbox" id="ev_{{e}}" checked>
+              <label class="form-check-label" for="ev_{{e}}">{{ e }}</label>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="card mt-3">
+      <div class="card-body">
+        <h6>Recent Events</h6>
+        <div class="table-responsive">
+          <table class="table table-sm">
+            <thead><tr><th>Time</th><th>Channel</th><th>Name</th><th>event_id</th><th>Status</th><th>Latency</th></tr></thead>
+            <tbody>
+              {% for r in recent %}
+              <tr>
+                <td>{{ r.ts }}</td>
+                <td>{{ r.channel }}</td>
+                <td>{{ r.event_name }}</td>
+                <td class="text-truncate" style="max-width:220px">{{ r.event_id }}</td>
+                <td>{{ r.status }}</td>
+                <td>{{ r.latency_ms }}ms</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function loadSettings(){
+  const res = await fetch('/admin/api/settings'); const s = await res.json();
+  document.getElementById('pix').checked = s.pixel_enabled;
+  document.getElementById('capi').checked = s.capi_enabled;
+  for (const [k,v] of Object.entries(s)){
+    if (k.startsWith('ev_')){
+      const el = document.getElementById(k);
+      if (el) el.checked = v;
+    }
+    if (k.startsWith('interval_')){
+      const el = document.querySelector('.interval[data-key="'+k+'"]');
+      if (el) el.value = s[k];
+    }
+    if (['chaos_drop','chaos_omit','chaos_malformed'].includes(k)){
+      const el = document.getElementById(k);
+      if (el) el.checked = !!s[k];
+    }
+    if (k==='rng_seed'){
+      const el = document.getElementById('seed');
+      if (el && s[k]) el.value = s[k];
+    }
+  }
+}
+async function toggle(key, value){
+  await fetch('/admin/api/toggle', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({key,value})});
+}
+document.getElementById('pix').addEventListener('change', e=> toggle('pixel_enabled', e.target.checked));
+document.getElementById('capi').addEventListener('change', e=> toggle('capi_enabled', e.target.checked));
+for (const el of document.querySelectorAll('.ev')){
+  el.addEventListener('change', e=> toggle(e.target.id, e.target.checked));
+}
+document.getElementById('autoStart').addEventListener('click', async ()=>{
+  // collect intervals
+  const intervals = {};
+  for (const el of document.querySelectorAll('.interval')){
+    intervals[el.dataset.key] = parseFloat(el.value || '1.0');
+    // persist
+    await fetch('/admin/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({[el.dataset.key]: el.value})});
+  }
+  await fetch('/admin/api/automation', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({cmd:'start', intervals})});
+  location.reload();
+});
+document.getElementById('autoStop').addEventListener('click', async ()=>{
+  await fetch('/admin/api/automation', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({cmd:'stop'})});
+  location.reload();
+});
+document.getElementById('seedBtn').addEventListener('click', async ()=>{
+  const v = document.getElementById('seed').value;
+  const res = await fetch('/admin/api/seed', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({seed: v})});
+  if (res.ok){ alert('Seed updated'); } else { alert('Invalid seed'); }
+});
+for (const id of ['chaos_drop','chaos_omit','chaos_malformed']){
+  document.getElementById(id).addEventListener('change', async (e)=>{
+    await fetch('/admin/api/chaos', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({[id]: e.target.checked})});
+  });
+}
+document.getElementById('pixelCheck').addEventListener('click', async ()=>{
+  const r = await fetch('/admin/api/pixel-check', {method:'POST'});
+  const j = await r.json();
+  const div = document.getElementById('pixelCheckResult');
+  if (j.ok){
+    div.textContent = `noindex: ${j.has_meta_noindex ? 'yes' : 'no'}, pixel snippet: ${j.has_pixel_snippet ? 'yes' : 'no'}`;
+  } else {
+    div.textContent = 'error: ' + (j.error || 'unknown');
+  }
+});
+document.getElementById('testBeacon').addEventListener('click', ()=>{
+  if (window.demoPixel){ window.demoPixel('PageView', {test:true}); alert('Beacon sent'); }
+  else { alert('Pixel snippet not available'); }
+});
+loadSettings();
+</script>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row">
+  <div class="col-md-6">
+    <img src="{{ p.image_url }}" class="img-fluid rounded" alt="{{ p.name }}">
+  </div>
+  <div class="col-md-6">
+    <h1>{{ p.name }}</h1>
+    <p class="text-muted">{{ p.description }}</p>
+    <p class="h4">{{ p.currency }} {{ '%.2f'|format(p.price) }}</p>
+    <a href="/add_to_cart/{{ p.sku }}" class="btn btn-success">Add to Cart</a>
+  </div>
+</div>
+{% endblock %}

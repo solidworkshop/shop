@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Catalog Management</h1>
+<form class="row g-2 mb-3" method="post">
+  <input type="hidden" name="action" value="add">
+  <div class="col-md-2"><input name="sku" placeholder="SKU" class="form-control" required></div>
+  <div class="col-md-4"><input name="name" placeholder="Name" class="form-control" required></div>
+  <div class="col-md-2"><input name="price" placeholder="Price" class="form-control" type="number" step="0.01" required></div>
+  <div class="col-md-2"><input name="currency" placeholder="Currency" class="form-control" value="USD"></div>
+  <div class="col-md-2"><button class="btn btn-primary w-100">Add</button></div>
+</form>
+<table class="table table-sm">
+  <thead><tr><th>SKU</th><th>Name</th><th>Price</th><th>Currency</th><th></th></tr></thead>
+  <tbody>
+    {% for p in items %}
+    <tr>
+      <td>{{ p.sku }}</td>
+      <td>{{ p.name }}</td>
+      <td>{{ p.price }}</td>
+      <td>{{ p.currency }}</td>
+      <td>
+        <form method="post" class="d-inline">
+          <input type="hidden" name="action" value="delete">
+          <input type="hidden" name="sku" value="{{ p.sku }}">
+          <button class="btn btn-outline-danger btn-sm">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

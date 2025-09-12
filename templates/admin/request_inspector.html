@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Request Inspector</h1>
+<div class="table-responsive">
+  <table class="table table-sm">
+    <thead><tr><th>Time</th><th>Channel</th><th>Event</th><th>Status</th><th>Latency</th><th>Payload</th><th>Error</th></tr></thead>
+    <tbody>
+      {% for r in logs %}
+      <tr>
+        <td>{{ r.ts }}</td>
+        <td>{{ r.channel }}</td>
+        <td>{{ r.event_name }}</td>
+        <td>{{ r.status }}</td>
+        <td>{{ r.latency_ms }}ms</td>
+        <td><code class="small d-inline-block text-wrap" style="max-width:420px;">{{ r.payload }}</code></td>
+        <td class="small text-danger">{{ r.error }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
