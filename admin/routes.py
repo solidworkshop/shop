@@ -364,14 +364,36 @@ def health_panel():
 
 @admin_bp.route("/api/pixel-check", methods=["POST"])
 @login_required
+@admin_bp.route("/api/pixel-check", methods=["POST"])
+@login_required
 def pixel_check():
-    # Fetch home page and check for our snippet bootstrap
+    import os
+    from flask import request as _rq
+    candidates = []
+    # 1) Prefer localhost inside the container
+    port = os.getenv("PORT")
+    if port:
+        candidates.append(f"http://127.0.0.1:{port}/")
+    # 2) Configured BASE_URL (must include https://)
+    base = (Config.BASE_URL or "").rstrip("/")
+    if base.startswith("http"):
+        candidates.append(f"{base}/")
+    # 3) Fallback to the current host_url
     try:
-        base = f"{Config.BASE_URL}".rstrip("/")
-        resp = requests.get(f"{base}/", timeout=5)
-        html = resp.text.lower()
-        has_meta_tag = 'name="robots"' in html or "noindex" in html
-        has_snippet = "window.demopixel" in html and "/static/js/pixel.js" in html
-        return {"ok": True, "has_meta_noindex": has_meta_tag, "has_pixel_snippet": has_snippet}
-    except Exception as e:
-        return {"ok": False, "error": str(e)[:200]}
+        if _rq and _rq.host_url:
+            candidates.append(_rq.host_url)
+    except Exception:
+        pass
+
+    last_err = None
+    for url in candidates:
+        try:
+            resp = requests.get(url, timeout=8)
+            html = resp.text.lower()
+            has_meta_noindex = ('name="robots"' in html) or ('noindex' in html)
+            has_pixel_snippet = ("window.demopixel" in html) or ("/static/js/pixel.js" in html)
+            return {"ok": True, "source": url, "has_meta_noindex": has_meta_noindex, "has_pixel_snippet": has_pixel_snippet}
+        except Exception as e:
+            last_err = str(e)[:200]
+            continue
+    return {"ok": False, "error": last_err or "unable to fetch any candidate URL"}
