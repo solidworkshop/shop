@@ -364,8 +364,6 @@ def health_panel():
 
 @admin_bp.route("/api/pixel-check", methods=["POST"])
 @login_required
-@admin_bp.route("/api/pixel-check", methods=["POST"])
-@login_required
 def pixel_check():
     import os
     from flask import request as _rq
@@ -392,8 +390,14 @@ def pixel_check():
             html = resp.text.lower()
             has_meta_noindex = ('name="robots"' in html) or ('noindex' in html)
             has_pixel_snippet = ("window.demopixel" in html) or ("/static/js/pixel.js" in html)
-            return {"ok": True, "source": url, "has_meta_noindex": has_meta_noindex, "has_pixel_snippet": has_pixel_snippet}
+            return {
+                "ok": True,
+                "source": url,
+                "has_meta_noindex": has_meta_noindex,
+                "has_pixel_snippet": has_pixel_snippet
+            }
         except Exception as e:
             last_err = str(e)[:200]
             continue
     return {"ok": False, "error": last_err or "unable to fetch any candidate URL"}
+
