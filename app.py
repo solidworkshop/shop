@@ -2,7 +2,10 @@
 import os, threading, time
 from datetime import datetime
 from flask import Flask, send_from_directory, Response, render_template
-from flask_migrate import Migrate
+try:
+    from flask_migrate import Migrate  # optional
+except Exception:
+    Migrate = lambda *a, **k: None  # no-op if not available
 from dotenv import load_dotenv
 
 from extensions import db, login_manager
@@ -20,16 +23,15 @@ def create_app():
     app.config.from_object(Config())
 
     db.init_app(app)
-    Migrate(app, db)
+    Migrate(app, db)  # safe even if it's the no-op
+
     login_manager.init_app(app)
 
     app.register_blueprint(shop_bp)
     app.register_blueprint(admin_bp, url_prefix="/admin")
 
-    # Disallow indexing
     @app.after_request
     def add_noindex(response):
-        # Add meta robots via templates; here we serve X-Robots-Tag as a belt-and-suspenders
         response.headers['X-Robots-Tag'] = 'noindex, nofollow, noarchive, nosnippet'
         return response
 
@@ -40,10 +42,8 @@ def create_app():
 
     @app.route("/healthz")
     def healthz():
-        # Minimal health endpoint
         return {"ok": True, "time": datetime.utcnow().isoformat()}
 
-    # Seed admin & build info on first run
     with app.app_context():
         ensure_seed_admin()
         KVStore.set("build_number", os.getenv("BUILD_NUMBER", "v1.0.0"))
