@@ -254,10 +254,32 @@ def api_chaos():
 @admin_bp.route("/api/manual_send", methods=["POST"])
 @login_required
 def manual_send():
-    payload = request.json or {}
-    status_p = send_pixel(payload)
-    status_c = send_capi(payload)
-    return {"ok": True, "pixel": status_p[0], "capi": status_c[0]}
+    try:
+        payload = request.get_json(force=True, silent=True) or {}
+        # sane defaults if caller omitted fields
+        payload.setdefault("event_name", "PageView")
+        payload.setdefault("event_id", str(uuid.uuid4()))
+        payload.setdefault("currency", "USD")
+        payload.setdefault("value", 0)
+
+        status_p = send_pixel(payload)
+        status_c = send_capi(payload)
+
+        return jsonify({"ok": True, "pixel": status_p[0], "capi": status_c[0]})
+    except Exception as e:
+        # Never 500 without a JSON body — log & report
+        try:
+            ev = EventLog(
+                ts=datetime.utcnow(), channel="capi",
+                event_name="manual_send", event_id=payload.get("event_id",""),
+                status="server_500", latency_ms=0,
+                payload=json.dumps(payload), error=str(e)[:1000]
+            )
+            db.session.add(ev); db.session.commit()
+        except Exception:
+            pass
+        return jsonify({"ok": False, "error": str(e)}), 500
+
 
 def automation_worker(event_name, interval_s):
     while not AUTOMATION_STOP.is_set():
