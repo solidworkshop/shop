@@ -37,3 +37,8 @@
 - Added lock retry wrapper for create/commit operations.
 - New `/_diag/dburi` to see effective DB URI.
 - Build badge v1.4.10.
+
+## v1.4.11
+- Clean rewrite of app.py to resolve SyntaxError from prior patching.
+- Keeps WAL, retries, diagnostics, and health endpoints.
+- Build badge v1.4.11.

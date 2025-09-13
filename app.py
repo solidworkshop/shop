@@ -1,14 +1,12 @@
-import logging, sys, traceback
+import logging, sys, time, traceback, os, random, string
 from flask import Flask, jsonify, render_template
+from sqlalchemy.exc import OperationalError
 from config import Config
 from extensions import db, login_manager
 from models import User, Product, KVStore, EventLog
 from admin.routes import admin_bp
 from shop.routes import shop_bp
-import os, random, string
 from werkzeug.security import generate_password_hash
-
-from sqlalchemy.exc import OperationalError
 
 def _retry(fn, attempts=5, delay=0.1):
     for i in range(attempts):
@@ -16,26 +14,22 @@ def _retry(fn, attempts=5, delay=0.1):
             return fn()
         except OperationalError as e:
             if "database is locked" in str(e):
-                time.sleep(delay*(i+1))
+                time.sleep(delay * (i + 1))
                 continue
             raise
     return fn()
 
-def _ensure_db_dir(uri):
-    # If sqlite path points to a file, ensure its directory exists
+def _ensure_db_dir(uri: str):
     if uri.startswith("sqlite:////"):
-        path = uri.replace("sqlite:////","/")
-        import os
+        path = uri.replace("sqlite:////", "/")
         d = os.path.dirname(path)
         if d and not os.path.exists(d):
             os.makedirs(d, exist_ok=True)
 
-
 def robust_sqlite_migration(app):
-    # Use engine.begin() to avoid nested transactions. No manual BEGIN/COMMIT.
-    from sqlalchemy import event
+    # Use engine.begin() contexts only; no manual BEGIN/COMMIT.
     with app.app_context():
-        # Ensure WAL mode for better concurrency on Render
+        # Set WAL mode and sane sync
         try:
             with db.engine.begin() as conn:
                 conn.exec_driver_sql("PRAGMA journal_mode=WAL")
@@ -57,30 +51,6 @@ def robust_sqlite_migration(app):
                 res = conn.exec_driver_sql("SELECT id, pw_hash FROM user").all()
                 for uid, pwh in res:
                     if pwh is None or pwh == "":
-                        from werkzeug.security import generate_password_hash
-
-from sqlalchemy.exc import OperationalError
-
-def _retry(fn, attempts=5, delay=0.1):
-    for i in range(attempts):
-        try:
-            return fn()
-        except OperationalError as e:
-            if "database is locked" in str(e):
-                time.sleep(delay*(i+1))
-                continue
-            raise
-    return fn()
-
-def _ensure_db_dir(uri):
-    # If sqlite path points to a file, ensure its directory exists
-    if uri.startswith("sqlite:////"):
-        path = uri.replace("sqlite:////","/")
-        import os
-        d = os.path.dirname(path)
-        if d and not os.path.exists(d):
-            os.makedirs(d, exist_ok=True)
-
                         hashed = generate_password_hash(os.getenv("ADMIN_PASSWORD","admin123"))
                         conn.exec_driver_sql("UPDATE user SET pw_hash = :h WHERE id = :i", {"h": hashed, "i": uid})
             except Exception:
@@ -96,8 +66,6 @@ def _ensure_db_dir(uri):
                     pcols = {row[1] for row in pinfo}
                     if any(col not in pcols for col in required):
                         need_rebuild = True
-                else:
-                    need_rebuild = False
             except Exception:
                 need_rebuild = False
 
@@ -138,25 +106,25 @@ def create_app():
     app.config.from_object(Config)
     # Ensure sqlite directory exists
     try:
-        _ensure_db_dir(app.config['SQLALCHEMY_DATABASE_URI'])
+        _ensure_db_dir(app.config.get("SQLALCHEMY_DATABASE_URI",""))
     except Exception:
         pass
 
-    # Basic logging to stdout so Render logs show traces
+    # Basic logging to stdout
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(logging.INFO)
     app.logger.setLevel(logging.INFO)
-    app.logger.addHandler(handler)
+    if not any(isinstance(h, logging.StreamHandler) for h in app.logger.handlers):
+        app.logger.addHandler(handler)
 
     db.init_app(app)
     login_manager.init_app(app)
 
     @login_manager.user_loader
     def load_user(uid):
-        from models import User
         return db.session.get(User, int(uid))
 
-    # Health endpoints
+    # Health & diagnostics
     @app.route("/healthz", methods=["GET", "HEAD"])
     def healthz():
         return "ok", 200
@@ -165,19 +133,15 @@ def create_app():
     def health():
         return "ok", 200
 
-    @app.route('/_diag/boot')
-    def diag_boot():
-        try:
-            from models import KVStore
-            return {'ok': True, 'last_boot_error': KVStore.get('last_boot_error')}
-        except Exception as e:
-            return {'ok': False, 'error': str(e)}, 500
-
-    # Diagnostics endpoints (no auth, lightweight)
     @app.route("/_diag/env")
     def diag_env():
         keys = ["PIXEL_ID","ACCESS_TOKEN","GRAPH_VER","BASE_URL","TEST_EVENT_CODE","FLASK_ENV"]
         return jsonify({k: bool(os.getenv(k)) for k in keys})
+
+    @app.route("/_diag/dburi")
+    def diag_dburi():
+        uri = app.config.get("SQLALCHEMY_DATABASE_URI","")
+        return {"uri": uri}
 
     @app.route("/_diag/db")
     def diag_db():
@@ -188,27 +152,23 @@ def create_app():
         except Exception as e:
             return jsonify({"ok": False, "error": str(e)}), 500
 
-    # Global error handler
+    # Global error handlers
     @app.errorhandler(Exception)
     def on_any_exception(e):
-        import traceback
         tb = ''.join(traceback.format_exception(None, e, e.__traceback__))
         try:
-            from models import EventLog
-            from extensions import db
-            ev = EventLog(channel='app', event_name='exception', status='500', latency_ms=0, payload='', error=tb[:4000])
-            db.session.add(ev); _retry(lambda: db.session.commit())
+            ev = EventLog(channel="app", event_name="exception", status="500", latency_ms=0, payload="", error=tb[:4000])
+            db.session.add(ev); db.session.commit()
         except Exception:
             pass
-        return ('Internal Server Error', 500)
+        return ("Internal Server Error", 500)
 
     @app.errorhandler(500)
     def on_500(e):
-        # Log traceback and store a row so admin can see it
         tb = ''.join(traceback.format_exception(None, e, e.__traceback__))
         try:
-            ev = EventLog(channel="app", event_name="error", status="500", latency_ms=0, payload="", error=tb[:2000])
-            db.session.add(ev); _retry(lambda: db.session.commit())
+            ev = EventLog(channel="app", event_name="error", status="500", latency_ms=0, payload="", error=tb[:4000])
+            db.session.add(ev); db.session.commit()
         except Exception:
             pass
         try:
@@ -216,6 +176,7 @@ def create_app():
         except Exception:
             return "Internal Server Error", 500
 
+    # DB boot
     with app.app_context():
         try:
             _retry(lambda: db.create_all())
@@ -242,7 +203,6 @@ def create_app():
                     db.session.add(p)
                 _retry(lambda: db.session.commit())
         except Exception as boot_err:
-            # surface boot errors in logs and set KV for admin to view
             app.logger.exception("Boot error: %s", boot_err)
             try:
                 KVStore.set("last_boot_error", str(boot_err))
