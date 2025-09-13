@@ -175,6 +175,17 @@ def create_app():
             info["db_error"] = str(e)
         return jsonify(info), 200
 
+    
+    @app.route("/_diag/session")
+    def diag_session():
+        try:
+            from flask import session
+            session['__ping'] = 'pong'
+            val = session.get('__ping')
+            return {'ok': True, 'session_write': val == 'pong'}, 200
+        except Exception as e:
+            return {'ok': False, 'error': str(e)}, 500
+
     @app.errorhandler(Exception)
     def on_any_exception(e):
         if isinstance(e, HTTPException):

@@ -62,3 +62,9 @@
 - Admin dashboard hardened: never returns 500 after login; shows inline warning if a query fails.
 - `?safe=1` skips heavy queries.
 - Build badge v1.4.15.
+
+## v1.4.16
+- Add `/admin/reset-password?token=ADMIN_RESET_TOKEN` to force-reset the admin password from env.
+- Add `/_diag/session` to confirm session write works (SECRET_KEY/cookies).
+- Login logs invalid attempts to stdout.
+- Build badge v1.4.16.

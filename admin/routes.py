@@ -1,6 +1,6 @@
 import json, uuid, time, requests, random, threading, ipaddress
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app as app
 from flask_login import login_user, logout_user, login_required
 from sqlalchemy import desc, func
 from config import Config
@@ -58,6 +58,10 @@ def login():
         if u and u.check_password(request.form.get("password") or ""):
             login_user(u, remember=True); return redirect(url_for("admin.dashboard"))
         flash("Invalid credentials","danger")
+        try:
+            app.logger.warning('Invalid admin login for %s', request.form.get('username'))
+        except Exception:
+            pass
     return render_template("admin/login.html")
 
 @admin_bp.route("/logout")
@@ -164,8 +168,8 @@ def send_capi(event, force_live=False):
 @admin_bp.route("/")
 @login_required
 def dashboard():
-    KVStore.set("build_number","v1.4.15")
-    build = KVStore.get("build_number","v1.4.15")
+    KVStore.set("build_number","v1.4.16")
+    build = KVStore.get("build_number","v1.4.16")
     dash_error = None
     try:
         c = Counters.get_or_create()
@@ -407,3 +411,24 @@ def admin_selftest():
         return {"ok": True, "kv": KVStore.get("last_admin_selftest"), "pixel": c.pixel, "capi": c.capi, "logs": total}, 200
     except Exception as e:
         return {"ok": False, "error": str(e)}, 500
+
+
+@admin_bp.route("/reset-password")
+def reset_password():
+    token = request.args.get("token","")
+    expected = os.getenv("ADMIN_RESET_TOKEN","")
+    if not expected or token != expected:
+        return {"ok": False, "error": "unauthorized"}, 401
+    try:
+        username = os.getenv("ADMIN_USERNAME","admin")
+        password = os.getenv("ADMIN_PASSWORD","admin123")
+        u = User.query.filter_by(username=username).first()
+        if not u:
+            u = User(username=username); u.set_password(password); db.session.add(u)
+        else:
+            u.set_password(password)
+        db.session.commit()
+        return {"ok": True, "message": "password reset", "username": username}, 200
+    except Exception as e:
+        return {"ok": False, "error": str(e)}, 500
+
