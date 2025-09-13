@@ -155,9 +155,9 @@ def send_capi(event, force_live=False):
 @admin_bp.route("/")
 @login_required
 def dashboard():
-    KVStore.set("build_number","v1.4.1")
+    KVStore.set("build_number","v1.4.3")
     c=Counters.get_or_create()
-    build=KVStore.get("build_number","v1.4.1")
+    build=KVStore.get("build_number","v1.4.3")
     recent=EventLog.query.order_by(desc(EventLog.ts)).limit(20).all()
     defaults={"PageView":1.5,"ViewContent":2.0,"AddToCart":3.5,"InitiateCheckout":4.0,"AddPaymentInfo":5.0,"Purchase":6.0}
     user_intervals={n: float(KVStore.get(f"interval_{n}", d)) for n,d in defaults.items()}
@@ -187,7 +187,7 @@ def api_settings():
             except Exception: pass
     return {"ok":True}
 
-@admin_bp.route("/api/chaos", methods=["POST"]) 
+@admin_bp.route("/api/chaos", methods=["POST"])
 @login_required
 def api_chaos():
     data=request.get_json(silent=True) or {}
@@ -195,7 +195,7 @@ def api_chaos():
         if k in data: KVStore.set(k, "1" if bool(data[k]) else "0")
     return {"ok":True}
 
-@admin_bp.route("/api/manual_send", methods=["POST"]) 
+@admin_bp.route("/api/manual_send", methods=["POST"])
 @login_required
 def manual_send():
     try:
@@ -250,7 +250,7 @@ def automation_worker(app, event_name, interval_s):
                 except Exception: pass
             time.sleep(max(0.25, _safe_float(interval_s,1.0)))
 
-@admin_bp.route("/api/automation", methods=["POST"]) 
+@admin_bp.route("/api/automation", methods=["POST"])
 @login_required
 def api_automation():
     data=request.get_json(silent=True) or {}
@@ -279,13 +279,13 @@ def api_automation():
         return {"ok":True,"stopped":True}
     return {"ok":False,"error":"unknown cmd"},400
 
-@admin_bp.route("/api/automation/ping", methods=["POST"]) 
+@admin_bp.route("/api/automation/ping", methods=["POST"])
 @login_required
 def api_automation_ping():
     payload={"event_name":"Purchase","event_id":str(uuid.uuid4()),"currency":"USD","value":99.0,"profit_margin":10.0}
     send_pixel(payload); send_capi(payload); return {"ok":True}
 
-@admin_bp.route("/api/automation_status") 
+@admin_bp.route("/api/automation_status")
 @login_required
 def api_automation_status():
     running=bool(AUTOMATION_THREADS) and not AUTOMATION_STOP.is_set()
@@ -300,7 +300,7 @@ def api_automation_status():
                     "pct_profit_margin": pct_margin(),
                     "pct_pltv": pct_pltv()})
 
-@admin_bp.route("/api/counters") 
+@admin_bp.route("/api/counters")
 @login_required
 def api_counters():
     c=Counters.get_or_create()
@@ -308,13 +308,13 @@ def api_counters():
     pltv_events   = db.session.query(func.count(EventLog.id)).filter(EventLog.payload.contains('"pltv"')).scalar() or 0
     return {"ok":True,"pixel":c.pixel,"capi":c.capi,"dedup":c.dedup,"margin_events":int(margin_events),"pltv_events":int(pltv_events)}
 
-@admin_bp.route("/api/health") 
+@admin_bp.route("/api/health")
 @login_required
 def api_health():
     px=getattr(Config,'PIXEL_ID',''); at=getattr(Config,'ACCESS_TOKEN',''); gv=getattr(Config,'GRAPH_VER',''); bu=getattr(Config,'BASE_URL','')
     return jsonify({"ok":True,"pixel_id_present":bool(px),"access_token_present":bool(at),"graph_version":gv,"base_url":bu})
 
-@admin_bp.route("/api/pixel-check", methods=["POST"]) 
+@admin_bp.route("/api/pixel-check", methods=["POST"])
 @login_required
 def pixel_check():
     import os, requests as rq
@@ -338,13 +338,13 @@ def pixel_check():
             last_err=str(e)[:200]; continue
     return {"ok":False,"error": last_err or "unable to fetch any candidate URL"}
 
-@admin_bp.route("/request-inspector") 
+@admin_bp.route("/request-inspector")
 @login_required
 def request_inspector():
     logs=EventLog.query.order_by(desc(EventLog.ts)).limit(100).all()
     return render_template("admin/request_inspector.html", logs=logs)
 
-@admin_bp.route("/logs") 
+@admin_bp.route("/logs")
 @login_required
 def logs_view():
     logs=EventLog.query.order_by(desc(EventLog.ts)).limit(500).all()

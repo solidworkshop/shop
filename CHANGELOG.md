@@ -1,5 +1,5 @@
 # Changelog
-## v1.4.1
-- **Auto-migration** for SQLite: adds `user.pw_hash` column and seeds hashes.
-- Bumped admin build badge to v1.4.1.
-- Full bundle (ALL files) for clean redeploy.
+
+## v1.4.3
+- Robust SQLite migration with product table rebuild if needed.
+- Build badge v1.4.3.

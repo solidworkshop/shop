@@ -1,4 +1,3 @@
-/* same as previous v1.4.0 admin-live.js (kept) */
 (function(){
   const $ = (sel)=>document.querySelector(sel);
   function note(msg, cls='info'){
@@ -107,19 +106,6 @@
     const t = await r.text();
     try{ document.querySelector('#manualResult').textContent = 'HTTP '+r.status+' — '+JSON.stringify(JSON.parse(t), null, 2); }
     catch{ document.querySelector('#manualResult').textContent = 'HTTP '+r.status+' — '+t; }
-  });
-  $('#pixelCheckBtn')?.addEventListener('click', async ()=>{
-    const out = document.querySelector('#pixelCheckResult'); out.textContent='Checking…';
-    try{
-      const r = await fetch('/admin/api/pixel-check', {method:'POST'});
-      const j = await r.json(); const stamp = new Date().toISOString();
-      if (j.ok) out.textContent = `[${stamp}] source: ${j.source} · noindex: ${j.has_meta_noindex ? 'yes' : 'no'} · pixel snippet: ${j.has_pixel_snippet ? 'yes' : 'no'}`;
-      else out.textContent = `[${stamp}] Error: ${j.error || 'unknown'}`;
-    }catch(e){ out.textContent='Error: '+e; }
-  });
-  document.querySelector('#btnHealth')?.addEventListener('click', async ()=>{
-    const r = await fetch('/admin/api/health'); const j = await r.json();
-    document.querySelector('#healthOut').textContent = JSON.stringify(j, null, 2);
   });
   async function poll(){
     try{
