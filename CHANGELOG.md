@@ -1,13 +1,11 @@
 # Changelog
 
-## v1.2.0
-- Counters show **Margin Events** and **PLTV Events** (count of events carrying those fields).
-- Added **% of Purchases with Profit Margin** and **% with PLTV** controls (0–100, default 100%).
-- Added **Manual Send (raw JSON)** card with Validate and Send.
-- Restored **Chaos** toggles (Drop, Omit, Malformed).
-- Moved **Health & Pixel Check** after Automation; added **Open Inspector** link.
-- Automation respects **Send Pixel** and **Send CAPI** switches (manual send unaffected).
-- CAPI robustness: IP validation, synthetic `fbp` when cookie absent (avoids 2804050).
-- Kept live counters/status polling and request inspector/logs pages.
-- Hidden Graph API badge from UI.
-- Build number set to v1.2.0 on the Admin dashboard.
+## v1.3.0
+- **Catalog Manager** added under `/admin/catalog`:
+  - Edit products inline (SKU, Name, Price, Currency, Image URL).
+  - Seed N demo items.
+  - Settings for Item Count, Currency Mode (auto/null/specific), Specific Currency, and Locale for previews.
+  - APIs: `/admin/api/catalog` (list/create/update), `/admin/api/catalog/<id>` (delete), `/admin/api/catalog/seed`, `/admin/api/catalog/settings`.
+- **Build badge now updates automatically** to v1.3.0 on admin load.
+
+(Previous: v1.2.0 — automation percentages, manual send UI, chaos toggles restored, counters as event counts, health & inspector links.)

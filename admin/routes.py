@@ -41,6 +41,12 @@ def pltv_randomized(): return (KVStore.get("pltv_randomized","1")=="1")
 def pct_margin(): return int(KVStore.get("pct_profit_margin","100"))
 def pct_pltv():   return int(KVStore.get("pct_pltv","100"))
 
+# Catalog settings
+def catalog_item_count(): return int(KVStore.get("catalog_item_count","12"))
+def catalog_currency_mode(): return KVStore.get("catalog_currency_mode","auto")  # auto|null|specific
+def catalog_currency_specific(): return KVStore.get("catalog_currency_specific","USD")
+def catalog_locale(): return KVStore.get("catalog_locale","en-US")
+
 # -------------------- Rate Limiting --------------------
 class TokenBucket:
     def __init__(self, qps, burst=None):
@@ -153,30 +159,23 @@ def send_capi(event):
         except Exception: fbp = f"fb.1.{int(time.time())}.{random.randint(1000000000, 9999999999)}"
 
     url = f"https://graph.facebook.com/{getattr(Config,'GRAPH_VER','v20.0')}/{getattr(Config,'PIXEL_ID','')}/events"
-    # attach profit_margin/pltv if present in event dict
-    custom = {
-        "currency": _sg(event,"currency","USD"),
-        "value": float(_sg(event,"value",0) or 0)
-    }
+    custom = {"currency": _sg(event,"currency","USD"), "value": float(_sg(event,"value",0) or 0)}
     if "profit_margin" in event: custom["profit_margin"] = _sg(event,"profit_margin")
     if "pltv" in event: custom["pltv"] = _sg(event,"pltv")
-
-    data = {
-        "data":[{
-            "event_name": _sg(event,"event_name","?"),
-            "event_time": int(time.time()),
-            "event_id": _sg(event,"event_id",str(uuid.uuid4())),
-            "action_source": "website",
-            "event_source_url": (getattr(Config,'BASE_URL',None) or "https://example.com"),
-            "user_data": {
-                "client_user_agent": ua,
-                **({"client_ip_address": clean_ip} if clean_ip else {}),
-                **({"fbp": fbp} if fbp else {}),
-                **({"fbc": fbc} if fbc else {}),
-            },
-            "custom_data": custom
-        }]
-    }
+    data = {"data":[{
+        "event_name": _sg(event,"event_name","?"),
+        "event_time": int(time.time()),
+        "event_id": _sg(event,"event_id",str(uuid.uuid4())),
+        "action_source": "website",
+        "event_source_url": (getattr(Config,'BASE_URL',None) or "https://example.com"),
+        "user_data": {
+            "client_user_agent": ua,
+            **({"client_ip_address": clean_ip} if clean_ip else {}),
+            **({"fbp": fbp} if fbp else {}),
+            **({"fbc": fbc} if fbc else {}),
+        },
+        "custom_data": custom
+    }]}
     test_code = getattr(Config,"TEST_EVENT_CODE","")
     if test_code: data["test_event_code"]=test_code
     try:
@@ -211,8 +210,10 @@ def send_capi(event):
 @admin_bp.route("/")
 @login_required
 def dashboard():
+    # Force-update build number so badge always matches this bundle
+    KVStore.set("build_number","v1.3.0")
     c = Counters.get_or_create()
-    build = KVStore.get("build_number","v1.2.0")
+    build = KVStore.get("build_number","v1.3.0")
     recent = EventLog.query.order_by(desc(EventLog.ts)).limit(20).all()
     default_intervals = {"PageView":1.5,"ViewContent":2.0,"AddToCart":3.5,"InitiateCheckout":4.0,"AddPaymentInfo":5.0,"Purchase":6.0}
     user_intervals = {n: float(KVStore.get(f"interval_{n}", d)) for n,d in default_intervals.items()}
@@ -230,7 +231,6 @@ def dashboard():
 def api_settings():
     if request.method == "POST":
         data = request.get_json(silent=True) or {}
-        # known keys
         if "automation_pixel" in data: KVStore.set("automation_pixel", "1" if data["automation_pixel"] else "0")
         if "automation_capi" in data:  KVStore.set("automation_capi", "1" if data["automation_capi"] else "0")
         if "pct_profit_margin" in data:
@@ -239,14 +239,13 @@ def api_settings():
         if "pct_pltv" in data:
             try: KVStore.set("pct_pltv", str(max(0,min(100,int(data["pct_pltv"])))))
             except Exception: pass
-        # intervals
         for n in ("PageView","ViewContent","AddToCart","InitiateCheckout","AddPaymentInfo","Purchase"):
             k = f"interval_{n}"
             if k in data:
                 try: KVStore.set(k, str(float(data[k])))
                 except Exception: pass
         return {"ok":True}
-    # GET current settings
+    # GET
     return {
         "chaos_drop": chaos_drop(),
         "chaos_omit": chaos_omit(),
@@ -268,7 +267,7 @@ def api_chaos():
         if k in data: KVStore.set(k, "1" if bool(data[k]) else "0")
     return {"ok":True}
 
-# -------------------- Manual Send (raw JSON supported) --------------------
+# -------------------- Manual Send --------------------
 @admin_bp.route("/api/manual_send", methods=["POST"])
 @login_required
 def manual_send():
@@ -278,20 +277,16 @@ def manual_send():
             raw = request.get_data(as_text=True) or ""
             body = json.loads(raw) if raw.strip() else {}
         payload = _as_dict(body)
-        # Defaults only if missing
         if "event_name" not in payload: payload["event_name"] = "PageView"
         if "event_id" not in payload:   payload["event_id"] = str(uuid.uuid4())
         if "currency" not in payload:   payload["currency"] = "USD"
         if "value" in payload:
             try: payload["value"] = float(payload["value"])
             except Exception: payload["value"] = 0.0
-        # Chaos effects on manual send (optional)
         if chaos_omit():
             payload.pop("currency", None)
         if chaos_malformed():
             payload["value"] = "NaN"
-
-        # Send both channels regardless of automation toggles
         p_status = send_pixel(payload)
         c_status = send_capi(payload)
         return jsonify({"ok": True, "pixel": p_status[0], "capi": c_status[0]})
@@ -314,7 +309,6 @@ def automation_worker(app, event_name, interval_s):
                 margin = max(0, price - cost)
                 value = price
                 event_payload["value"] = value
-                # Apply percentages
                 if random.randint(1,100) <= pct_margin():
                     event_payload["profit_margin"] = round(margin, 2)
                 if pltv_randomized() and (random.randint(1,100) <= pct_pltv()):
@@ -380,7 +374,106 @@ def api_automation_status():
             "automation_pixel": get_auto_pixel(), "automation_capi": get_auto_capi(),
             "pct_profit_margin": pct_margin(), "pct_pltv": pct_pltv()}
 
-# -------------------- Inspector & Health --------------------
+# -------------------- Catalog Management --------------------
+def product_to_dict(p):
+    return {
+        "id": p.id, "sku": p.sku, "name": p.name, "price": float(getattr(p,"price",0) or 0),
+        "currency": getattr(p,"currency","USD"),
+        "description": getattr(p,"description",""),
+        "image_url": getattr(p,"image_url","")
+    }
+
+@admin_bp.route("/catalog")
+@login_required
+def catalog_page():
+    products = Product.query.order_by(Product.id.asc()).all()
+    return render_template("admin/catalog.html",
+        products=products,
+        settings={
+            "item_count": catalog_item_count(),
+            "currency_mode": catalog_currency_mode(),
+            "currency_specific": catalog_currency_specific(),
+            "locale": catalog_locale()
+        }
+    )
+
+@admin_bp.route("/api/catalog", methods=["GET","POST"])
+@login_required
+def api_catalog():
+    if request.method == "GET":
+        products = Product.query.order_by(Product.id.asc()).all()
+        return jsonify({"ok":True, "products":[product_to_dict(p) for p in products]})
+    data = request.get_json(silent=True) or {}
+    pid = data.get("id")
+    if pid:
+        p = Product.query.get(pid)
+        if not p: return {"ok":False,"error":"not found"},404
+    else:
+        p = Product()
+        db.session.add(p)
+    p.sku = data.get("sku") or p.sku or f"SKU-{random.randint(10000,99999)}"
+    p.name = data.get("name") or p.name or "Product"
+    try:
+        p.price = float(data.get("price", getattr(p,"price",0) or 0))
+    except Exception:
+        p.price = 0.0
+    p.currency = data.get("currency") or getattr(p,"currency", catalog_currency_specific() if catalog_currency_mode()=="specific" else "USD")
+    p.description = data.get("description") or getattr(p,"description","")
+    p.image_url = data.get("image_url") or getattr(p,"image_url","")
+    db.session.commit()
+    return {"ok":True, "product": product_to_dict(p)}
+
+@admin_bp.route("/api/catalog/<int:pid>", methods=["DELETE"])
+@login_required
+def api_catalog_delete(pid):
+    p = Product.query.get(pid)
+    if not p: return {"ok":False,"error":"not found"},404
+    db.session.delete(p); db.session.commit()
+    return {"ok":True}
+
+@admin_bp.route("/api/catalog/seed", methods=["POST"])
+@login_required
+def api_catalog_seed():
+    data = request.get_json(silent=True) or {}
+    count = int(data.get("count", catalog_item_count()))
+    mode = catalog_currency_mode()
+    cur = catalog_currency_specific()
+    for i in range(count):
+        p = Product(
+            sku=f"SKU-{random.randint(10000,99999)}",
+            name=f"Demo Item {random.randint(100,999)}",
+            price=round(random.uniform(5,250), 2),
+            currency=(None if mode=="null" else (cur if mode=="specific" else "USD")),
+            description="Demo product for Pixel/CAPI testing.",
+            image_url="https://picsum.photos/seed/"+str(random.randint(1,9999))+"/400/400"
+        )
+        db.session.add(p)
+    db.session.commit()
+    return {"ok":True,"seeded":count}
+
+@admin_bp.route("/api/catalog/settings", methods=["GET","POST"])
+@login_required
+def api_catalog_settings():
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        if "item_count" in data:
+            try: KVStore.set("catalog_item_count", str(max(1, int(data["item_count"]))))
+            except Exception: pass
+        if "currency_mode" in data:
+            if data["currency_mode"] in ("auto","null","specific"):
+                KVStore.set("catalog_currency_mode", data["currency_mode"])
+        if "currency_specific" in data:
+            KVStore.set("catalog_currency_specific", str(data["currency_specific"]).upper()[:3])
+        if "locale" in data:
+            KVStore.set("catalog_locale", str(data["locale"]))
+        return {"ok":True}
+    return {"ok":True,
+            "item_count": catalog_item_count(),
+            "currency_mode": catalog_currency_mode(),
+            "currency_specific": catalog_currency_specific(),
+            "locale": catalog_locale()}
+
+# -------------------- Inspector & Pixel Check --------------------
 @admin_bp.route("/request-inspector")
 @login_required
 def request_inspector():
