@@ -1,111 +1,81 @@
 
 {% extends 'admin/layout.html' %}
 {% block body %}
-<div class="container py-4">
-  <div class="row g-3">
-    <!-- Automation -->
-    <div class="col-12">
-      <div class="card mb-3">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <strong>Automation</strong>
-          <span id="automation-status" class="badge text-bg-{{ 'success' if running else 'secondary' }}">{{ 'running' if running else 'stopped' }}</span>
-        </div>
-        <div class="card-body d-flex flex-wrap gap-2">
-          <button class="btn btn-success btn-sm" onclick="startIntervals()">Start</button>
-          <button class="btn btn-outline-secondary btn-sm" onclick="stopIntervals()">Stop</button>
-          <div class="vr"></div>
-          <div class="input-group input-group-sm" style="max-width:200px;">
-            <span class="input-group-text">Interval (s)</span>
-            <input id="interval" type="number" min="1" class="form-control" value="{{ (kv.get('automation_interval','5') if kv else '5') if false else '5' }}" onblur="saveKV('automation_interval', this.value)">
-          </div>
-          <div class="input-group input-group-sm" style="max-width:220px;">
-            <span class="input-group-text">% PLTV</span>
-            <input id="pct_pltv" type="number" min="0" max="100" class="form-control" value="100" onblur="saveKV('pct_pltv', this.value)">
-          </div>
-          <div class="input-group input-group-sm" style="max-width:220px;">
-            <span class="input-group-text">% Margin</span>
-            <input id="pct_margin" type="number" min="0" max="100" class="form-control" value="100" onblur="saveKV('pct_margin', this.value)">
-          </div>
-        </div>
+<div class="container py-4" style="max-width:900px">
+  <div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <strong>Automation</strong>
+      <span id="automation-status" class="badge text-bg-secondary">stopped</span>
+    </div>
+    <div class="card-body d-flex flex-wrap gap-2">
+      <button class="btn btn-success btn-sm" onclick="startIntervals()">Start</button>
+      <button class="btn btn-outline-secondary btn-sm" onclick="stopIntervals()">Stop</button>
+      <div class="vr"></div>
+      <div class="input-group input-group-sm" style="max-width:200px;">
+        <span class="input-group-text">Interval (s)</span>
+        <input id="interval" type="number" min="1" class="form-control" value="5" onblur="saveKV('automation_interval', this.value)">
+      </div>
+      <div class="input-group input-group-sm" style="max-width:220px;">
+        <span class="input-group-text">% PLTV</span>
+        <input id="pct_pltv" type="number" min="0" max="100" class="form-control" value="100" onblur="saveKV('pct_pltv', this.value)">
+      </div>
+      <div class="input-group input-group-sm" style="max-width:220px;">
+        <span class="input-group-text">% Margin</span>
+        <input id="pct_margin" type="number" min="0" max="100" class="form-control" value="100" onblur="saveKV('pct_margin', this.value)">
       </div>
     </div>
+  </div>
 
-    <!-- Health & Pixel Check -->
-    <div class="col-12">
-      <div class="card mb-3">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <strong>Health & Pixel Check</strong>
-          <a class="btn btn-link btn-sm" href="/admin/inspector" target="_blank">Open Inspector</a>
-        </div>
-        <div class="card-body">
-          <div class="d-flex flex-wrap gap-2 align-items-center">
-            <button class="btn btn-outline-primary btn-sm" onclick="runPixelCheck()">Run Pixel Check</button>
-            <code id="pixel-check-res" class="small text-muted"></code>
-          </div>
-        </div>
-      </div>
+  <div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <strong>Health & Pixel Check</strong>
+      <a class="btn btn-link btn-sm" href="/admin/inspector">Open Inspector</a>
     </div>
-
-    <!-- Counters -->
-    <div class="col-12">
-      <div class="card mb-3">
-        <div class="card-header"><strong>Counters</strong></div>
-        <div class="card-body d-flex gap-4">
-          <div><div class="small text-muted">Pixel</div><div id="cnt-pixel" class="fs-4">0</div></div>
-          <div><div class="small text-muted">CAPI</div><div id="cnt-capi" class="fs-4">0</div></div>
-          <div><div class="small text-muted">Deduped</div><div id="cnt-deduped" class="fs-4">0</div></div>
-          <div><div class="small text-muted">Margin (events)</div><div id="cnt-margin_events" class="fs-4">0</div></div>
-          <div><div class="small text-muted">PLTV (events)</div><div id="cnt-pltv_events" class="fs-4">0</div></div>
-        </div>
-      </div>
+    <div class="card-body">
+      <button class="btn btn-outline-primary btn-sm" onclick="runPixelCheck()">Run Pixel Check</button>
+      <code id="pixel-check-res" class="small text-muted ms-2"></code>
     </div>
+  </div>
 
-    <!-- Chaos & Manual send -->
-    <div class="col-12">
-      <div class="card mb-3">
-        <div class="card-header"><strong>Chaos & Manual Send</strong></div>
-        <div class="card-body d-flex flex-wrap gap-3">
-          <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" id="ch_drop" onchange="saveKV('chaos_drop', this.checked ? 1 : 0)">
-            <label class="form-check-label" for="ch_drop">Drop</label>
-          </div>
-          <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" id="ch_omit" onchange="saveKV('chaos_omit_ud', this.checked ? 1 : 0)">
-            <label class="form-check-label" for="ch_omit">Omit user_data</label>
-          </div>
-          <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" id="ch_mal" onchange="saveKV('chaos_malformed', this.checked ? 1 : 0)">
-            <label class="form-check-label" for="ch_mal">Malformed</label>
-          </div>
-          <div class="vr"></div>
-          <div class="flex-grow-1">
-            <div class="input-group">
-              <span class="input-group-text">Manual JSON</span>
-              <input id="manual-json" class="form-control" placeholder='{"event_name":"Purchase","custom_data":{"value":9.99,"currency":"USD"}}'>
-              <button class="btn btn-primary" onclick="manualSend()">Send</button>
-            </div>
-            <div class="small text-muted mt-1" id="manual-res"></div>
-          </div>
+  <div class="card mb-3">
+    <div class="card-header"><strong>Counters</strong></div>
+    <div class="card-body d-flex gap-4">
+      <div><div class="small text-muted">Pixel</div><div id="cnt-pixel" class="fs-4">0</div></div>
+      <div><div class="small text-muted">CAPI</div><div id="cnt-capi" class="fs-4">0</div></div>
+      <div><div class="small text-muted">Deduped</div><div id="cnt-deduped" class="fs-4">0</div></div>
+      <div><div class="small text-muted">Margin (events)</div><div id="cnt-margin_events" class="fs-4">0</div></div>
+      <div><div class="small text-muted">PLTV (events)</div><div id="cnt-pltv_events" class="fs-4">0</div></div>
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header"><strong>Chaos & Manual Send</strong></div>
+    <div class="card-body d-flex flex-wrap gap-3">
+      <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="ch_drop" onchange="saveKV('chaos_drop', this.checked ? 1 : 0)">
+        <label class="form-check-label" for="ch_drop">Drop</label>
+      </div>
+      <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="ch_omit" onchange="saveKV('chaos_omit_ud', this.checked ? 1 : 0)">
+        <label class="form-check-label" for="ch_omit">Omit user_data</label>
+      </div>
+      <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="ch_mal" onchange="saveKV('chaos_malformed', this.checked ? 1 : 0)">
+        <label class="form-check-label" for="ch_mal">Malformed</label>
+      </div>
+      <div class="vr"></div>
+      <div class="flex-grow-1">
+        <div class="input-group">
+          <span class="input-group-text">Manual JSON</span>
+          <input id="manual-json" class="form-control" placeholder='{"event_name":"Purchase","custom_data":{"value":9.99,"currency":"USD"}}'>
+          <button class="btn btn-primary" onclick="manualSend()">Send</button>
         </div>
+        <div class="small text-muted mt-1" id="manual-res"></div>
       </div>
     </div>
   </div>
 </div>
 <script>
-async function saveKV(k,v){
-  await fetch('/admin/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({[k]: v})});
-}
-async function runPixelCheck(){
-  const r = await fetch('/admin/pixel-check'); const t = await r.text();
-  document.getElementById('pixel-check-res').textContent = t;
-}
-async function manualSend(){
-  try{
-    const txt = document.getElementById('manual-json').value;
-    const body = JSON.parse(txt);
-    const r = await fetch('/admin/manual_send', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-    const t = await r.text(); document.getElementById('manual-res').textContent = t;
-  }catch(e){ document.getElementById('manual-res').textContent = 'Invalid JSON: ' + e; }
-}
+setTimeout(()=>{ pollAutomation(); pollCounters(); }, 250);
 </script>
 {% endblock %}
