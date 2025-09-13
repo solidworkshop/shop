@@ -57,7 +57,7 @@
     await fetch('/admin/api/automation', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ cmd:'stop' }) });
   });
 
-  // Channel toggles & test code
+  // Toggles
   $('#autoPixel')?.addEventListener('change', async (e)=>{
     await fetch('/admin/api/settings', { method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ automation_pixel: e.target.checked }) });
@@ -115,7 +115,6 @@
     catch{ $('#manualResult').textContent = 'HTTP '+r.status+' — '+t; }
   });
   $('#btnSendLive')?.addEventListener('click', async ()=>{
-    // force a live purchase with a new ID even if UI textarea is empty
     let txt = $('#manualJson').value || '';
     if (!txt.trim()){
       const id = 'live-' + Math.random().toString(36).slice(2);
@@ -126,6 +125,24 @@
     const t = await r.text();
     try{ $('#manualResult').textContent = 'HTTP '+r.status+' — '+JSON.stringify(JSON.parse(t), null, 2); }
     catch{ $('#manualResult').textContent = 'HTTP '+r.status+' — '+t; }
+  });
+
+  // Pixel checker (more obvious output)
+  $('#pixelCheckBtn')?.addEventListener('click', async ()=>{
+    const out = $('#pixelCheckResult');
+    out.textContent = 'Checking…';
+    try{
+      const r = await fetch('/admin/api/pixel-check', {method:'POST'});
+      const j = await r.json();
+      const stamp = new Date().toISOString();
+      if (j.ok) {
+        out.textContent = `[${stamp}] source: ${j.source} · noindex: ${j.has_meta_noindex ? 'yes' : 'no'} · pixel snippet: ${j.has_pixel_snippet ? 'yes' : 'no'}`;
+      } else {
+        out.textContent = `[${stamp}] Error: ` + (j.error || 'unknown');
+      }
+    } catch(e){
+      out.textContent = 'Error: ' + e;
+    }
   });
 
   // Health summary

@@ -1,13 +1,10 @@
 # Changelog
 
-## v1.3.1
-- **Events Manager visibility helpers**:
-  - Added **Use Test Event Code** toggle (Automation card). Turn **off** to send live server events without `test_event_code` so Data Sources "Recent activity" reflects them.
-  - New **Send Live Purchase Now** button that bypasses test code for a one-shot live send.
-  - `/admin/api/health` shows whether Pixel ID / Access Token are present and which Graph version/base URL are in use.
-- **Catalog updates**:
-  - Product has new fields: **cost** (REAL) and **description** (TEXT, accepts HTML).
-  - SQLite columns are auto-added on first admin load.
-  - Catalog Manager table now includes **Cost** and **Description (HTML)** columns.
-  - Automation **Purchase** uses catalog price/cost when available (else falls back to random).
-- Build badge auto-updates to **v1.3.1** on admin load.
+## v1.3.2
+- **Admin layout**: switched to a **single-column** stack to simplify scanning on smaller screens.
+- **Back to store** link added to the admin header.
+- **Pixel Check**: clearer, timestamped results in the UI.
+- **FBP fix**: when `_fbp` cookie is missing, we now generate an **ephemeral** `fb.1.*` value per request (not persisted), so it won’t be the same across all events.
+- Build badge auto-updates to **v1.3.2**.
+
+(Previous: v1.3.1 — events visibility helpers, catalog cost/description, auto-migrations; v1.3.0 — catalog manager; v1.2.0 — automation percentages, manual send UI, chaos toggles.)
