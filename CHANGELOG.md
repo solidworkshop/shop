@@ -57,3 +57,8 @@
 - Add `/_selftest` (no-auth) and `/admin/selftest` (auth) to verify routing, env, and DB health quickly.
 - Keeps all features; fixes focus on admin 500 visibility.
 - Build badge v1.4.14.
+
+## v1.4.15
+- Admin dashboard hardened: never returns 500 after login; shows inline warning if a query fails.
+- `?safe=1` skips heavy queries.
+- Build badge v1.4.15.

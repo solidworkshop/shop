@@ -164,17 +164,49 @@ def send_capi(event, force_live=False):
 @admin_bp.route("/")
 @login_required
 def dashboard():
-    KVStore.set("build_number","v1.4.14")
-    c=Counters.get_or_create()
-    build=KVStore.get("build_number","v1.4.14")
-    recent=EventLog.query.order_by(desc(EventLog.ts)).limit(20).all()
+    KVStore.set("build_number","v1.4.15")
+    build = KVStore.get("build_number","v1.4.15")
+    dash_error = None
+    try:
+        c = Counters.get_or_create()
+    except Exception as e:
+        c = Counters(pixel=0, capi=0, dedup=0)
+        dash_error = f"Counters unavailable: {e}"
+    events = ["PageView","ViewContent","AddToCart","InitiateCheckout","AddPaymentInfo","Purchase"]
     defaults={"PageView":1.5,"ViewContent":2.0,"AddToCart":3.5,"InitiateCheckout":4.0,"AddPaymentInfo":5.0,"Purchase":6.0}
-    user_intervals={n: float(KVStore.get(f"interval_{n}", d)) for n,d in defaults.items()}
+    try:
+        intervals={n: float(KVStore.get(f"interval_{n}", d)) for n,d in defaults.items()}
+    except Exception as e:
+        intervals = {n:d for n,d in defaults.items()}
+        dash_error = dash_error or f"Intervals unavailable: {e}"
     chaos={"drop": chaos_drop(), "omit": chaos_omit(), "malformed": chaos_malformed()}
-    return render_template("admin/dashboard.html", counters=c, build=build, recent=recent, events=EVENT_NAMES,
-                           intervals=user_intervals, chaos=chaos,
-                           auto_pixel=get_auto_pixel(), auto_capi=get_auto_capi(), use_test_code=use_test_code(),
-                           pct_profit_margin=pct_margin(), pct_pltv=pct_pltv())
+    try:
+        safe = request.args.get("safe") == "1"
+    except Exception:
+        safe = False
+    recent = []
+    if not safe:
+        try:
+            recent = EventLog.query.order_by(desc(EventLog.ts)).limit(20).all()
+        except Exception as e:
+            dash_error = dash_error or f"Recent logs unavailable: {e}"
+    context = dict(counters=c, build=build, recent=recent, events=events, intervals=intervals, chaos=chaos,
+                   auto_pixel=get_auto_pixel(), auto_capi=get_auto_capi(), use_test_code=use_test_code(),
+                   pct_profit_margin=pct_margin(), pct_pltv=pct_pltv(), dash_error=dash_error)
+    try:
+        return render_template("admin/dashboard.html", **context), 200
+    except Exception as e:
+        # Last-resort minimal HTML (never 500 after login)
+        msg = dash_error or str(e)
+        return f"""<!doctype html><html><head><meta charset='utf-8'><title>Admin</title>
+<meta name='robots' content='noindex,nofollow'>
+<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css'>
+</head><body class='bg-light'><div class='container py-4'>
+<div class='alert alert-danger'><strong>Dashboard could not render</strong><div class='small text-muted'>{msg}</div></div>
+<p class='mb-3'>Try <a href='/admin?safe=1'>safe mode</a> or check <a href='/admin/logs'>Logs</a>.</p>
+<a href='/' class='btn btn-outline-secondary btn-sm'>← Back to store</a>
+</div></body></html>""", 200
+
 
 @admin_bp.route("/api/settings", methods=["POST"])
 @login_required
