@@ -9,6 +9,18 @@ from models import User, KVStore, EventLog, Counters
 
 admin_bp = Blueprint("admin", __name__, template_folder="../templates/admin")
 
+def ensure_schema():
+    try:
+        # quick table existence probes
+        db.session.execute(text("SELECT 1 FROM user LIMIT 1"))
+        db.session.execute(text("SELECT 1 FROM product LIMIT 1"))
+    except Exception:
+        try:
+            db.create_all()
+        except Exception:
+            pass
+
+
 def _as_dict(x):
     if isinstance(x, dict): return x
     try: return dict(x)
@@ -53,16 +65,30 @@ capi_bucket=TokenBucket(float(getattr(Config,"RATE_LIMIT_QPS_CAPI",5)))
 
 @admin_bp.route("/login", methods=["GET","POST"])
 def login():
+    ensure_schema()
     if request.method=="POST":
-        u = User.query.filter_by(username=request.form.get("username") or "").first()
-        if u and u.check_password(request.form.get("password") or ""):
-            login_user(u, remember=True); return redirect(url_for("admin.dashboard"))
-        flash("Invalid credentials","danger")
         try:
-            app.logger.warning('Invalid admin login for %s', request.form.get('username'))
-        except Exception:
-            pass
+            username = request.form.get("username","")
+            password = request.form.get("password","")
+            u = User.query.filter_by(username=username).first()
+            if u and u.check_password(password):
+                # remember=True to persist session
+                from datetime import timedelta
+                login_user(u, remember=True, duration=timedelta(days=7))
+                # go to safe dashboard first
+                return redirect(url_for("admin.dashboard", safe=1))
+            else:
+                # Avoid flash (needs session); render inline error
+                return render_template("admin/login.html", error="Invalid credentials", username=username), 401
+        except Exception as e:
+            try:
+                ev = EventLog(channel="app", event_name="login_error", status="500", latency_ms=0, payload="", error=str(e)[:1000])
+                db.session.add(ev); db.session.commit()
+            except Exception:
+                pass
+            return render_template("admin/login.html", error="Login failed. See /admin/logs for details."), 500
     return render_template("admin/login.html")
+
 
 @admin_bp.route("/logout")
 @login_required
@@ -168,8 +194,9 @@ def send_capi(event, force_live=False):
 @admin_bp.route("/")
 @login_required
 def dashboard():
-    KVStore.set("build_number","v1.4.16")
-    build = KVStore.get("build_number","v1.4.16")
+    ensure_schema()
+    KVStore.set("build_number","v1.4.17")
+    build = KVStore.get("build_number","v1.4.17")
     dash_error = None
     try:
         c = Counters.get_or_create()

@@ -68,3 +68,8 @@
 - Add `/_diag/session` to confirm session write works (SECRET_KEY/cookies).
 - Login logs invalid attempts to stdout.
 - Build badge v1.4.16.
+
+## v1.4.17
+- Login POST now self-heals schema, avoids session flash issues, and redirects to safe dashboard.
+- Inline login errors instead of 500.
+- Build badge v1.4.17.

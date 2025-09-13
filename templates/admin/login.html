@@ -9,10 +9,11 @@
 <body class="bg-light">
 <div class="container py-5" style="max-width:480px">
   <h4 class="mb-3">Admin Login</h4>
+  {% if error %}<div class="alert alert-danger py-2 px-3 small">{{ error }}</div>{% endif %}
   <form method="POST">
     <div class="mb-3">
       <label class="form-label">Username</label>
-      <input name="username" class="form-control" required>
+      <input name="username" class="form-control" value="{{ username or '' }}" required>
     </div>
     <div class="mb-3">
       <label class="form-label">Password</label>
