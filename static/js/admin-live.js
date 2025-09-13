@@ -26,6 +26,8 @@
         }
         const ap = $('#autoPixel'); if (ap) ap.checked = !!s.automation_pixel;
         const ac = $('#autoCapi');  if (ac) ac.checked = !!s.automation_capi;
+        const pm = $('#pct_profit_margin'); if (pm) pm.value = s.pct_profit_margin ?? pm.value;
+        const pl = $('#pct_pltv'); if (pl) pl.value = s.pct_pltv ?? pl.value;
       }
     } catch(e) {
       // ignore
@@ -34,6 +36,7 @@
     }
   }
 
+  // Intervals helpers
   function gatherIntervals() {
     const names = ['PageView','ViewContent','AddToCart','InitiateCheckout','AddPaymentInfo','Purchase'];
     const obj = {};
@@ -45,43 +48,73 @@
   }
 
   // Start/Stop
-  const startBtn = $('#startAuto');
-  if (startBtn) startBtn.addEventListener('click', async ()=>{
+  $('#startAuto')?.addEventListener('click', async ()=>{
     const body = { cmd:'start', intervals: gatherIntervals() };
     await fetch('/admin/api/automation', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
   });
-  const stopBtn = $('#stopAuto');
-  if (stopBtn) stopBtn.addEventListener('click', async ()=>{
+  $('#stopAuto')?.addEventListener('click', async ()=>{
     await fetch('/admin/api/automation', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ cmd:'stop' }) });
   });
 
   // Channel toggles (automation only)
-  const autoPixel = $('#autoPixel');
-  if (autoPixel) autoPixel.addEventListener('change', async ()=>{
+  $('#autoPixel')?.addEventListener('change', async (e)=>{
     await fetch('/admin/api/settings', { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ automation_pixel: autoPixel.checked }) });
+      body: JSON.stringify({ automation_pixel: e.target.checked }) });
   });
-  const autoCapi = $('#autoCapi');
-  if (autoCapi) autoCapi.addEventListener('change', async ()=>{
+  $('#autoCapi')?.addEventListener('change', async (e)=>{
     await fetch('/admin/api/settings', { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ automation_capi: autoCapi.checked }) });
+      body: JSON.stringify({ automation_capi: e.target.checked }) });
   });
 
-  // Pixel checker
-  const pixelBtn = $('#pixelCheckBtn'), pixelOut = $('#pixelCheckResult');
-  if (pixelBtn) pixelBtn.addEventListener('click', async ()=>{
-    pixelOut.textContent = 'Checking...';
-    try{
-      const r = await fetch('/admin/api/pixel-check', {method:'POST'});
-      const j = await r.json();
-      if (j.ok) {
-        pixelOut.textContent = `source: ${j.source} · noindex: ${j.has_meta_noindex ? 'yes' : 'no'} · pixel snippet: ${j.has_pixel_snippet ? 'yes' : 'no'}`;
-      } else {
-        pixelOut.textContent = 'Error: ' + (j.error || 'unknown');
-      }
+  // Percent controls
+  $('#pct_profit_margin')?.addEventListener('change', async (e)=>{
+    const v = Math.max(0, Math.min(100, parseInt(e.target.value || '0', 10)));
+    e.target.value = v;
+    await fetch('/admin/api/settings', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ pct_profit_margin: v }) });
+  });
+  $('#pct_pltv')?.addEventListener('change', async (e)=>{
+    const v = Math.max(0, Math.min(100, parseInt(e.target.value || '0', 10)));
+    e.target.value = v;
+    await fetch('/admin/api/settings', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ pct_pltv: v }) });
+  });
+
+  // Chaos toggles
+  async function setChaos(key, value){
+    await fetch('/admin/api/chaos', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ [key]: value })});
+  }
+  $('#chaos_drop')?.addEventListener('change', e=> setChaos('chaos_drop', e.target.checked));
+  $('#chaos_omit')?.addEventListener('change', e=> setChaos('chaos_omit', e.target.checked));
+  $('#chaos_malformed')?.addEventListener('change', e=> setChaos('chaos_malformed', e.target.checked));
+
+  // Manual Validate & Send
+  $('#btnValidate')?.addEventListener('click', ()=>{
+    const txt = $('#manualJson').value || '';
+    try {
+      const obj = JSON.parse(txt);
+      if (!obj.event_name) throw new Error('Missing "event_name"');
+      if (!obj.event_id) throw new Error('Missing "event_id"');
+      $('#manualResult').textContent = 'Valid ✓';
     } catch(e){
-      pixelOut.textContent = 'Error: ' + e;
+      $('#manualResult').textContent = 'Invalid JSON: ' + e.message;
     }
+  });
+  $('#btnSend')?.addEventListener('click', async ()=>{
+    const txt = $('#manualJson').value || '';
+    try{
+      JSON.parse(txt); // basic validation
+    } catch(e){
+      $('#manualResult').textContent = 'Invalid JSON: ' + e.message;
+      return;
+    }
+    const r = await fetch('/admin/api/manual_send', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: txt
+    });
+    const t = await r.text();
+    try{ $('#manualResult').textContent = 'HTTP '+r.status+' — '+JSON.stringify(JSON.parse(t), null, 2); }
+    catch{ $('#manualResult').textContent = 'HTTP '+r.status+' — '+t; }
   });
 
   // Start polling

@@ -1,19 +1,13 @@
-# CHANGELOG
+# Changelog
 
-## v1.0.0
-- Initial modular Flask app with SQLite persistence
-- Public shop: home, product detail, cart, checkout, about, FAQ, contact
-- Admin console (Flask-Login) with master switches, per-event toggles
-- Automation presets with global start/stop and token-bucket QPS per channel
-- Request inspector + logs + counters (pixel, capi, dedup, margin Σ, PLTV Σ)
-- robots.txt + meta noindex + X-Robots-Tag header
-- Catalog manager (editable items, add/delete, basic multicurrency field)
-- CAPI dry-run if creds not provided, real forwarding if configured
-
-
-## v1.0.1
-- Added Chaos toggles UI (drop events, omit params, malformed payloads)
-- Added Seed control for deterministic randomness
-- Added per-event interval controls and persistence
-- Added Pixel install checker API and UI
-- Embedded JS pixel snippet + test beacon button; added /pixel-collect to log beacons
+## v1.2.0
+- Counters show **Margin Events** and **PLTV Events** (count of events carrying those fields).
+- Added **% of Purchases with Profit Margin** and **% with PLTV** controls (0–100, default 100%).
+- Added **Manual Send (raw JSON)** card with Validate and Send.
+- Restored **Chaos** toggles (Drop, Omit, Malformed).
+- Moved **Health & Pixel Check** after Automation; added **Open Inspector** link.
+- Automation respects **Send Pixel** and **Send CAPI** switches (manual send unaffected).
+- CAPI robustness: IP validation, synthetic `fbp` when cookie absent (avoids 2804050).
+- Kept live counters/status polling and request inspector/logs pages.
+- Hidden Graph API badge from UI.
+- Build number set to v1.2.0 on the Admin dashboard.

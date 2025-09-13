@@ -38,6 +38,9 @@ def pltv_min(): return float(KVStore.get("pltv_min","120"))
 def pltv_max(): return float(KVStore.get("pltv_max","600"))
 def pltv_randomized(): return (KVStore.get("pltv_randomized","1")=="1")
 
+def pct_margin(): return int(KVStore.get("pct_profit_margin","100"))
+def pct_pltv():   return int(KVStore.get("pct_pltv","100"))
+
 # -------------------- Rate Limiting --------------------
 class TokenBucket:
     def __init__(self, qps, burst=None):
@@ -150,6 +153,14 @@ def send_capi(event):
         except Exception: fbp = f"fb.1.{int(time.time())}.{random.randint(1000000000, 9999999999)}"
 
     url = f"https://graph.facebook.com/{getattr(Config,'GRAPH_VER','v20.0')}/{getattr(Config,'PIXEL_ID','')}/events"
+    # attach profit_margin/pltv if present in event dict
+    custom = {
+        "currency": _sg(event,"currency","USD"),
+        "value": float(_sg(event,"value",0) or 0)
+    }
+    if "profit_margin" in event: custom["profit_margin"] = _sg(event,"profit_margin")
+    if "pltv" in event: custom["pltv"] = _sg(event,"pltv")
+
     data = {
         "data":[{
             "event_name": _sg(event,"event_name","?"),
@@ -163,12 +174,7 @@ def send_capi(event):
                 **({"fbp": fbp} if fbp else {}),
                 **({"fbc": fbc} if fbc else {}),
             },
-            "custom_data": {
-                "currency": _sg(event,"currency","USD"),
-                "value": float(_sg(event,"value",0) or 0),
-                **({"profit_margin": _sg(event,"profit_margin")} if "profit_margin" in event else {}),
-                **({"pltv": _sg(event,"pltv")} if "pltv" in event else {}),
-            }
+            "custom_data": custom
         }]
     }
     test_code = getattr(Config,"TEST_EVENT_CODE","")
@@ -206,8 +212,7 @@ def send_capi(event):
 @login_required
 def dashboard():
     c = Counters.get_or_create()
-    build = KVStore.get("build_number","v1.0.0")
-    graph = KVStore.get("graph_version","v20.0")
+    build = KVStore.get("build_number","v1.2.0")
     recent = EventLog.query.order_by(desc(EventLog.ts)).limit(20).all()
     default_intervals = {"PageView":1.5,"ViewContent":2.0,"AddToCart":3.5,"InitiateCheckout":4.0,"AddPaymentInfo":5.0,"Purchase":6.0}
     user_intervals = {n: float(KVStore.get(f"interval_{n}", d)) for n,d in default_intervals.items()}
@@ -215,8 +220,9 @@ def dashboard():
     auto_pixel = get_auto_pixel()
     auto_capi = get_auto_capi()
     return render_template("admin/dashboard.html",
-        counters=c, build=build, graph=graph, recent=recent, events=EVENT_NAMES,
-        intervals=user_intervals, chaos=chaos, auto_pixel=auto_pixel, auto_capi=auto_capi)
+        counters=c, build=build, recent=recent, events=EVENT_NAMES,
+        intervals=user_intervals, chaos=chaos, auto_pixel=auto_pixel, auto_capi=auto_capi,
+        pct_profit_margin=pct_margin(), pct_pltv=pct_pltv())
 
 # -------------------- Settings APIs --------------------
 @admin_bp.route("/api/settings", methods=["GET","POST"])
@@ -224,8 +230,21 @@ def dashboard():
 def api_settings():
     if request.method == "POST":
         data = request.get_json(silent=True) or {}
-        for k,v in data.items():
-            KVStore.set(k, "1" if (str(v).lower() in ("1","true","on","yes")) else "0")
+        # known keys
+        if "automation_pixel" in data: KVStore.set("automation_pixel", "1" if data["automation_pixel"] else "0")
+        if "automation_capi" in data:  KVStore.set("automation_capi", "1" if data["automation_capi"] else "0")
+        if "pct_profit_margin" in data:
+            try: KVStore.set("pct_profit_margin", str(max(0,min(100,int(data["pct_profit_margin"])))))
+            except Exception: pass
+        if "pct_pltv" in data:
+            try: KVStore.set("pct_pltv", str(max(0,min(100,int(data["pct_pltv"])))))
+            except Exception: pass
+        # intervals
+        for n in ("PageView","ViewContent","AddToCart","InitiateCheckout","AddPaymentInfo","Purchase"):
+            k = f"interval_{n}"
+            if k in data:
+                try: KVStore.set(k, str(float(data[k])))
+                except Exception: pass
         return {"ok":True}
     # GET current settings
     return {
@@ -234,6 +253,8 @@ def api_settings():
         "chaos_malformed": chaos_malformed(),
         "automation_pixel": get_auto_pixel(),
         "automation_capi": get_auto_capi(),
+        "pct_profit_margin": pct_margin(),
+        "pct_pltv": pct_pltv(),
         **{ f"interval_{n}": float(KVStore.get(f"interval_{n}", d))
            for n,d in {"PageView":1.5,"ViewContent":2.0,"AddToCart":3.5,"InitiateCheckout":4.0,"AddPaymentInfo":5.0,"Purchase":6.0}.items()
         }
@@ -247,30 +268,35 @@ def api_chaos():
         if k in data: KVStore.set(k, "1" if bool(data[k]) else "0")
     return {"ok":True}
 
-# -------------------- Manual Send --------------------
+# -------------------- Manual Send (raw JSON supported) --------------------
 @admin_bp.route("/api/manual_send", methods=["POST"])
 @login_required
 def manual_send():
-    payload = {}
     try:
         body = request.get_json(silent=True)
         if body is None:
             raw = request.get_data(as_text=True) or ""
             body = json.loads(raw) if raw.strip() else {}
         payload = _as_dict(body)
-        payload.setdefault("event_name","PageView")
-        payload.setdefault("event_id", str(uuid.uuid4()))
-        payload.setdefault("currency","USD")
-        # Allow manual inclusion of profit_margin/pltv; do not auto-add here
-        try: payload["value"] = float(payload.get("value",0) or 0)
-        except Exception: payload["value"] = 0.0
-        try: p_status = send_pixel(payload)
-        except Exception as e: p_status=("error",0,str(e)[:1000])
-        try: c_status = send_capi(payload)
-        except Exception as e: c_status=("error",0,str(e)[:1000])
-        return jsonify({"ok":True,"pixel":p_status[0],"capi":c_status[0]})
+        # Defaults only if missing
+        if "event_name" not in payload: payload["event_name"] = "PageView"
+        if "event_id" not in payload:   payload["event_id"] = str(uuid.uuid4())
+        if "currency" not in payload:   payload["currency"] = "USD"
+        if "value" in payload:
+            try: payload["value"] = float(payload["value"])
+            except Exception: payload["value"] = 0.0
+        # Chaos effects on manual send (optional)
+        if chaos_omit():
+            payload.pop("currency", None)
+        if chaos_malformed():
+            payload["value"] = "NaN"
+
+        # Send both channels regardless of automation toggles
+        p_status = send_pixel(payload)
+        c_status = send_capi(payload)
+        return jsonify({"ok": True, "pixel": p_status[0], "capi": c_status[0]})
     except Exception as e:
-        return jsonify({"ok":False,"error":str(e)}),500
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 # -------------------- Automation --------------------
 AUTOMATION_THREADS = {}
@@ -279,7 +305,6 @@ AUTOMATION_STOP = threading.Event()
 def automation_worker(app, event_name, interval_s):
     with app.app_context():
         while not AUTOMATION_STOP.is_set():
-            # Respect per-event toggle if you have them; otherwise always on
             value = 0.0; currency="USD"
             event_payload = {"event_name": event_name, "event_id": str(uuid.uuid4()), "currency": currency}
             if event_name == "Purchase":
@@ -288,17 +313,15 @@ def automation_worker(app, event_name, interval_s):
                 cost = price * random.uniform(cmin,cmax)
                 margin = max(0, price - cost)
                 value = price
-                event_payload.update({
-                    "value": value,
-                    "profit_margin": round(margin, 2),
-                    "pltv": round(random.uniform(pltv_min(), pltv_max()), 2) if pltv_randomized() else None
-                })
-                if event_payload.get("pltv") is None:
-                    event_payload.pop("pltv", None)
+                event_payload["value"] = value
+                # Apply percentages
+                if random.randint(1,100) <= pct_margin():
+                    event_payload["profit_margin"] = round(margin, 2)
+                if pltv_randomized() and (random.randint(1,100) <= pct_pltv()):
+                    event_payload["pltv"] = round(random.uniform(pltv_min(), pltv_max()), 2)
             else:
                 event_payload["value"] = value
 
-            # Send only to channels enabled for automation
             if get_auto_pixel():
                 try: send_pixel(event_payload)
                 except Exception: pass
@@ -338,7 +361,6 @@ def api_automation():
 @login_required
 def api_counters():
     c = Counters.get_or_create()
-    # Count events that include profit_margin / pltv in payload (across both channels)
     margin_events = db.session.query(func.count(EventLog.id)).filter(EventLog.payload.contains('"profit_margin"')).scalar() or 0
     pltv_events   = db.session.query(func.count(EventLog.id)).filter(EventLog.payload.contains('"pltv"')).scalar() or 0
     return {
@@ -355,7 +377,8 @@ def api_counters():
 def api_automation_status():
     running = bool(AUTOMATION_THREADS) and not AUTOMATION_STOP.is_set()
     return {"ok": True, "running": running, "threads": list(AUTOMATION_THREADS.keys()),
-            "automation_pixel": get_auto_pixel(), "automation_capi": get_auto_capi()}
+            "automation_pixel": get_auto_pixel(), "automation_capi": get_auto_capi(),
+            "pct_profit_margin": pct_margin(), "pct_pltv": pct_pltv()}
 
 # -------------------- Inspector & Health --------------------
 @admin_bp.route("/request-inspector")
