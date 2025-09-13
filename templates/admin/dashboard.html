@@ -1,69 +1,109 @@
 
 {% extends 'admin/layout.html' %}
 {% block body %}
-<div class="container py-4" style="max-width:900px">
+<div class="container py-4" style="max-width:960px">
+  <!-- Automation -->
   <div class="card mb-3">
     <div class="card-header d-flex justify-content-between align-items-center">
       <strong>Automation</strong>
-      <span id="automation-status" class="badge text-bg-secondary">stopped</span>
+      <span id="automation-status" class="badge text-bg-{{ 'success' if running else 'secondary' }}">{{ 'running' if running else 'stopped' }}</span>
     </div>
-    <div class="card-body d-flex flex-wrap gap-2">
+    <div class="card-body d-flex flex-wrap gap-2 align-items-center">
       <button class="btn btn-success btn-sm" onclick="startIntervals()">Start</button>
       <button class="btn btn-outline-secondary btn-sm" onclick="stopIntervals()">Stop</button>
+      <span class="smallmuted">Threads: <span id="thread-count">{{ threads }}</span></span>
       <div class="vr"></div>
-      <div class="input-group input-group-sm" style="max-width:200px;">
+      <div class="input-group input-group-sm kv-w">
         <span class="input-group-text">Interval (s)</span>
-        <input id="interval" type="number" min="1" class="form-control" value="5" onblur="saveKV('automation_interval', this.value)">
+        <input type="number" min="1" class="form-control" value="{{ cfg.automation_interval or 5 }}" onblur="saveKV('automation_interval', this.value)">
       </div>
-      <div class="input-group input-group-sm" style="max-width:220px;">
-        <span class="input-group-text">% PLTV</span>
-        <input id="pct_pltv" type="number" min="0" max="100" class="form-control" value="100" onblur="saveKV('pct_pltv', this.value)">
+      <div class="input-group input-group-sm kv-w">
+        <span class="input-group-text">Concurrency</span>
+        <input type="number" min="1" max="10" class="form-control" value="{{ cfg.automation_concurrency or 2 }}" onblur="saveKV('automation_concurrency', this.value)">
       </div>
-      <div class="input-group input-group-sm" style="max-width:220px;">
-        <span class="input-group-text">% Margin</span>
-        <input id="pct_margin" type="number" min="0" max="100" class="form-control" value="100" onblur="saveKV('pct_margin', this.value)">
+      <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="dry-run" {% if cfg.dry_run=='1' %}checked{% endif %} onchange="saveKV('dry_run', this.checked?1:0)">
+        <label class="form-check-label" for="dry-run">Self-test Dry Run</label>
       </div>
     </div>
   </div>
 
+  <!-- Master switches, per-event toggles & rate limiting -->
   <div class="card mb-3">
-    <div class="card-header d-flex justify-content-between align-items-center">
-      <strong>Health & Pixel Check</strong>
-      <a class="btn btn-link btn-sm" href="/admin/inspector">Open Inspector</a>
-    </div>
+    <div class="card-header"><strong>Channels & Events</strong></div>
     <div class="card-body">
-      <button class="btn btn-outline-primary btn-sm" onclick="runPixelCheck()">Run Pixel Check</button>
-      <code id="pixel-check-res" class="small text-muted ms-2"></code>
+      <div class="d-flex flex-wrap gap-3 align-items-center mb-2">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="en_px" {% if cfg.enable_pixel!='0' %}checked{% endif %} onchange="saveKV('enable_pixel', this.checked?1:0)">
+          <label class="form-check-label" for="en_px">Enable Pixel</label>
+        </div>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="en_ca" {% if cfg.enable_capi!='0' %}checked{% endif %} onchange="saveKV('enable_capi', this.checked?1:0)">
+          <label class="form-check-label" for="en_ca">Enable CAPI</label>
+        </div>
+        <div class="input-group input-group-sm kv-w">
+          <span class="input-group-text">Pixel QPS</span>
+          <input type="number" min="0" class="form-control" value="{{ cfg.pixel_qps or 5 }}" onblur="saveKV('pixel_qps', this.value)">
+        </div>
+        <div class="input-group input-group-sm kv-w">
+          <span class="input-group-text">CAPI QPS</span>
+          <input type="number" min="0" class="form-control" value="{{ cfg.capi_qps or 5 }}" onblur="saveKV('capi_qps', this.value)">
+        </div>
+      </div>
+      <div class="row row-cols-2 row-cols-md-3 g-1">
+        {% for ev in standard_events %}
+        <div class="col">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="ev_{{ev}}" {% if ev_toggles[ev] %}checked{% endif %} onchange="saveKV('on_{{ev}}', this.checked?1:0)">
+            <label class="form-check-label" for="ev_{{ev}}">{{ ev }}</label>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      <hr>
+      <div class="d-flex flex-wrap gap-2">
+        <div class="input-group input-group-sm kv-w">
+          <span class="input-group-text">% PLTV</span>
+          <input type="number" min="0" max="100" class="form-control" value="{{ cfg.pct_pltv or 100 }}" onblur="saveKV('pct_pltv', this.value)">
+        </div>
+        <div class="input-group input-group-sm kv-w">
+          <span class="input-group-text">% Margin</span>
+          <input type="number" min="0" max="100" class="form-control" value="{{ cfg.pct_margin or 100 }}" onblur="saveKV('pct_margin', this.value)">
+        </div>
+        <div class="input-group input-group-sm kv-w">
+          <span class="input-group-text">PLTV</span>
+          <input type="number" step="0.01" class="form-control" value="{{ cfg.pltv_value or 49.0 }}" onblur="saveKV('pltv_value', this.value)">
+        </div>
+        <div class="input-group input-group-sm kv-w">
+          <span class="input-group-text">Margin min%</span>
+          <input type="number" step="0.1" class="form-control" value="{{ cfg.margin_min or 10 }}" onblur="saveKV('margin_min', this.value)">
+        </div>
+        <div class="input-group input-group-sm kv-w">
+          <span class="input-group-text">Margin max%</span>
+          <input type="number" step="0.1" class="form-control" value="{{ cfg.margin_max or 50 }}" onblur="saveKV('margin_max', this.value)">
+        </div>
+      </div>
     </div>
   </div>
 
+  <!-- Chaos & Manual send -->
   <div class="card mb-3">
-    <div class="card-header"><strong>Counters</strong></div>
-    <div class="card-body d-flex gap-4">
-      <div><div class="small text-muted">Pixel</div><div id="cnt-pixel" class="fs-4">0</div></div>
-      <div><div class="small text-muted">CAPI</div><div id="cnt-capi" class="fs-4">0</div></div>
-      <div><div class="small text-muted">Deduped</div><div id="cnt-deduped" class="fs-4">0</div></div>
-      <div><div class="small text-muted">Margin (events)</div><div id="cnt-margin_events" class="fs-4">0</div></div>
-      <div><div class="small text-muted">PLTV (events)</div><div id="cnt-pltv_events" class="fs-4">0</div></div>
-    </div>
-  </div>
-
-  <div class="card mb-4">
-    <div class="card-header"><strong>Chaos & Manual Send</strong></div>
+    <div class="card-header"><strong>Chaos, Manual & Self-test</strong></div>
     <div class="card-body d-flex flex-wrap gap-3">
-      <div class="form-check form-switch">
-        <input class="form-check-input" type="checkbox" id="ch_drop" onchange="saveKV('chaos_drop', this.checked ? 1 : 0)">
-        <label class="form-check-label" for="ch_drop">Drop</label>
+      <div>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="ch_drop" onchange="saveKV('chaos_drop', this.checked ? 1 : 0)">
+          <label class="form-check-label" for="ch_drop">Drop</label>
+        </div>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="ch_omit" onchange="saveKV('chaos_omit_ud', this.checked ? 1 : 0)">
+          <label class="form-check-label" for="ch_omit">Omit user_data</label>
+        </div>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="ch_mal" onchange="saveKV('chaos_malformed', this.checked ? 1 : 0)">
+          <label class="form-check-label" for="ch_mal">Malformed</label>
+        </div>
       </div>
-      <div class="form-check form-switch">
-        <input class="form-check-input" type="checkbox" id="ch_omit" onchange="saveKV('chaos_omit_ud', this.checked ? 1 : 0)">
-        <label class="form-check-label" for="ch_omit">Omit user_data</label>
-      </div>
-      <div class="form-check form-switch">
-        <input class="form-check-input" type="checkbox" id="ch_mal" onchange="saveKV('chaos_malformed', this.checked ? 1 : 0)">
-        <label class="form-check-label" for="ch_mal">Malformed</label>
-      </div>
-      <div class="vr"></div>
       <div class="flex-grow-1">
         <div class="input-group">
           <span class="input-group-text">Manual JSON</span>
@@ -74,8 +114,31 @@
       </div>
     </div>
   </div>
+
+  <!-- Counters -->
+  <div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <strong>Counters</strong>
+      <a class="btn btn-link btn-sm" href="/admin/inspector">Open Inspector</a>
+    </div>
+    <div class="card-body d-flex gap-4 flex-wrap">
+      <div><div class="small text-muted">Pixel</div><div id="cnt-pixel" class="fs-4">{{ counters.pixel }}</div></div>
+      <div><div class="small text-muted">CAPI</div><div id="cnt-capi" class="fs-4">{{ counters.capi }}</div></div>
+      <div><div class="small text-muted">Deduped</div><div id="cnt-deduped" class="fs-4">{{ counters.deduped }}</div></div>
+      <div><div class="small text-muted">Margin (events)</div><div id="cnt-margin_events" class="fs-4">{{ counters.margin_events }}</div></div>
+      <div><div class="small text-muted">PLTV (events)</div><div id="cnt-pltv_events" class="fs-4">{{ counters.pltv_events }}</div></div>
+    </div>
+  </div>
+
+  <!-- Health -->
+  <div class="card mb-4">
+    <div class="card-header"><strong>Health & Pixel Check</strong></div>
+    <div class="card-body">
+      <button class="btn btn-outline-primary btn-sm" onclick="runPixelCheck()">Run Pixel Check</button>
+      <code id="pixel-check-res" class="small text-muted ms-2"></code>
+      <div class="small text-muted mt-2">Build: {{ build }} | Graph: {{ pixel_id and 'configured' or 'unset' }}</div>
+    </div>
+  </div>
 </div>
-<script>
-setTimeout(()=>{ pollAutomation(); pollCounters(); }, 250);
-</script>
+<script>setTimeout(()=>{ pollAutomation(); pollCounters(); }, 250);</script>
 {% endblock %}

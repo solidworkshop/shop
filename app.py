@@ -1,9 +1,9 @@
 
 import os
-from flask import Flask, jsonify, render_template, request, make_response, session, redirect, url_for
+from flask import Flask, render_template, request, make_response, session, redirect, url_for
 from flask_cors import CORS
 from extensions import db, login_manager
-from models import User, Product, KVStore, EventLog
+from models import User, Product, KVStore
 
 DB_PATH = "/var/tmp/app.db"
 
@@ -27,22 +27,23 @@ def create_app():
     app.register_blueprint(admin_bp, url_prefix="/admin")
 
     @app.route("/healthz")
-    def healthz(): return "ok v2.0.2", 200
+    def healthz(): return "ok v2.5.0", 200
 
     @app.after_request
     def add_noindex(resp):
         resp.headers["X-Robots-Tag"] = "noindex, nofollow"
         return resp
 
+    # Public store
     @app.route("/")
     def home():
         products = Product.query.all()
-        return render_template("public/home.html", products=products, build="v2.0.2", pixel_id=os.getenv("PIXEL_ID",""))
+        return render_template("public/home.html", products=products, build="v2.5.0", pixel_id=os.getenv("PIXEL_ID",""))
 
     @app.route("/p/<slug>")
     def product_detail(slug):
         p = Product.query.filter_by(slug=slug).first_or_404()
-        return render_template("public/product.html", p=p, build="v2.0.2", pixel_id=os.getenv("PIXEL_ID",""))
+        return render_template("public/product.html", p=p, build="v2.5.0", pixel_id=os.getenv("PIXEL_ID",""))
 
     @app.route("/cart/add/<int:pid>", methods=["POST"])
     def cart_add(pid):
@@ -55,17 +56,17 @@ def create_app():
     def checkout():
         if request.method == "POST":
             session["cart"] = {}
-            return render_template("public/thanks.html", build="v2.0.2", pixel_id=os.getenv("PIXEL_ID",""))
-        return render_template("public/checkout.html", build="v2.0.2", pixel_id=os.getenv("PIXEL_ID",""))
+            return render_template("public/thanks.html", build="v2.5.0", pixel_id=os.getenv("PIXEL_ID",""))
+        return render_template("public/checkout.html", build="v2.5.0", pixel_id=os.getenv("PIXEL_ID",""))
 
     @app.route("/about")
-    def about(): return render_template("public/about.html", build="v2.0.2", pixel_id=os.getenv("PIXEL_ID",""))
+    def about(): return render_template("public/about.html", build="v2.5.0", pixel_id=os.getenv("PIXEL_ID",""))
 
     @app.route("/faq")
-    def faq(): return render_template("public/faq.html", build="v2.0.2", pixel_id=os.getenv("PIXEL_ID",""))
+    def faq(): return render_template("public/faq.html", build="v2.5.0", pixel_id=os.getenv("PIXEL_ID",""))
 
     @app.route("/contact")
-    def contact(): return render_template("public/contact.html", build="v2.0.2", pixel_id=os.getenv("PIXEL_ID",""))
+    def contact(): return render_template("public/contact.html", build="v2.5.0", pixel_id=os.getenv("PIXEL_ID",""))
 
     @app.route("/robots.txt")
     def robots():
@@ -76,6 +77,7 @@ def create_app():
     return app
 
 def seed_admin():
+    from models import User
     username = os.getenv("ADMIN_USERNAME","admin")
     password = os.getenv("ADMIN_PASSWORD","admin123")
     u = User.query.filter_by(username=username).first()
@@ -84,6 +86,7 @@ def seed_admin():
         db.session.add(u); db.session.commit()
 
 def seed_products():
+    from models import Product
     if Product.query.count() == 0:
         items = [
             dict(sku="SKU-1", slug="widget-alpha", name="Widget Alpha", price=19.99, cost=8.50, currency="USD",

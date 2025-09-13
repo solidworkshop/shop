@@ -1,7 +1,7 @@
 
-# Shop + Pixel/CAPI Tester (v2.0.2)
+# Shop + Pixel/CAPI Tester (v2.5.0)
 
-Single-column admin, full features, working store pages. Robots.txt noindex. SQLite persistence.
+**Restored rich Admin** (master channel switches, per-event toggles, QPS caps, concurrency, chaos, manual JSON with dry-run), plus Inspector, Logs, Catalog, live counters, and health checks. Public store pages included.
 
 ## Env
 SECRET_KEY=change-me
