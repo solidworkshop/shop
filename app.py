@@ -154,6 +154,27 @@ def create_app():
             return jsonify({"ok": False, "error": str(e)}), 500
 
     # Global error handlers
+
+    @app.route("/_selftest")
+    def selftest():
+        info = {
+            "python": sys.version,
+            "cwd": os.getcwd(),
+            "db_uri": app.config.get("SQLALCHEMY_DATABASE_URI",""),
+            "env_present": {k: bool(os.getenv(k)) for k in ["PIXEL_ID","ACCESS_TOKEN","GRAPH_VER","BASE_URL","TEST_EVENT_CODE","SECRET_KEY"]},
+            "routes": sorted([str(r) for r in app.url_map.iter_rules()])[:120],
+        }
+        # Try a trivial DB round-trip (read-only where possible)
+        try:
+            with db.engine.begin() as conn:
+                mode = conn.exec_driver_sql("PRAGMA journal_mode").scalar()
+            info["sqlite_journal_mode"] = mode
+            info["db_ok"] = True
+        except Exception as e:
+            info["db_ok"] = False
+            info["db_error"] = str(e)
+        return jsonify(info), 200
+
     @app.errorhandler(Exception)
     def on_any_exception(e):
         if isinstance(e, HTTPException):

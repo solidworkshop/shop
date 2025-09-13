@@ -1,4 +1,4 @@
-# Demo Store + Meta Pixel & CAPI Tester — v1.4.12 (FULL)
+# Demo Store + Meta Pixel & CAPI Tester — v1.4.14 (FULL)
 
 See CHANGELOG for details. Deploy on Render with the provided commands and env vars.
 

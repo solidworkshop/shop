@@ -47,3 +47,13 @@
 - Fix: global exception handler now **skips** `HTTPException` so redirects/404s work.
 - Add `/admin/health` endpoint for quick admin readiness check.
 - Build badge v1.4.12.
+
+## v1.4.13
+- Add Flask-Login `unauthorized_handler` to redirect `/admin/*` anonymous requests to `/admin/login` instead of 500.
+- Add `/admin/ping` for quick blueprint sanity check.
+- Build badge v1.4.13.
+
+## v1.4.14
+- Add `/_selftest` (no-auth) and `/admin/selftest` (auth) to verify routing, env, and DB health quickly.
+- Keeps all features; fixes focus on admin 500 visibility.
+- Build badge v1.4.14.

@@ -4,7 +4,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_user, logout_user, login_required
 from sqlalchemy import desc, func
 from config import Config
-from extensions import db
+from extensions import db, login_manager
 from models import User, KVStore, EventLog, Counters
 
 admin_bp = Blueprint("admin", __name__, template_folder="../templates/admin")
@@ -64,6 +64,11 @@ def login():
 @login_required
 def logout():
     logout_user(); return redirect(url_for("admin.login"))
+
+@login_manager.unauthorized_handler
+def _unauth():
+    # Always redirect anonymous users to the admin login page
+    return redirect(url_for('admin.login'))
 
 @admin_bp.route("/health")
 def admin_health():
@@ -159,9 +164,9 @@ def send_capi(event, force_live=False):
 @admin_bp.route("/")
 @login_required
 def dashboard():
-    KVStore.set("build_number","v1.4.12")
+    KVStore.set("build_number","v1.4.14")
     c=Counters.get_or_create()
-    build=KVStore.get("build_number","v1.4.12")
+    build=KVStore.get("build_number","v1.4.14")
     recent=EventLog.query.order_by(desc(EventLog.ts)).limit(20).all()
     defaults={"PageView":1.5,"ViewContent":2.0,"AddToCart":3.5,"InitiateCheckout":4.0,"AddPaymentInfo":5.0,"Purchase":6.0}
     user_intervals={n: float(KVStore.get(f"interval_{n}", d)) for n,d in defaults.items()}
@@ -353,3 +358,20 @@ def request_inspector():
 def logs_view():
     logs=EventLog.query.order_by(desc(EventLog.ts)).limit(500).all()
     return render_template("admin/logs.html", logs=logs)
+
+@admin_bp.route('/ping')
+def admin_ping():
+    return {'ok': True}, 200
+
+@admin_bp.route("/selftest")
+@login_required
+def admin_selftest():
+    try:
+        # quick DB write-then-read
+        from models import KVStore, Counters, EventLog
+        KVStore.set("last_admin_selftest","ok")
+        c = Counters.get_or_create()
+        total = EventLog.query.count()
+        return {"ok": True, "kv": KVStore.get("last_admin_selftest"), "pixel": c.pixel, "capi": c.capi, "logs": total}, 200
+    except Exception as e:
+        return {"ok": False, "error": str(e)}, 500
