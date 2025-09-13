@@ -1,3 +1,4 @@
+/* same as previous v1.4.0 admin-live.js (kept) */
 (function(){
   const $ = (sel)=>document.querySelector(sel);
   function note(msg, cls='info'){
@@ -81,7 +82,6 @@
     const v = Math.max(0, Math.min(100, parseInt(e.target.value || '0', 10)));
     e.target.value = v; postJSON('/admin/api/settings',{pct_pltv:v});
   });
-  // Manual send
   $('#btnValidate')?.addEventListener('click', ()=>{
     const txt = (document.querySelector('#manualJson')?.value)||'';
     try { const o = JSON.parse(txt); if(!o.event_name||!o.event_id) throw new Error('Missing event_name or event_id'); 
@@ -108,7 +108,6 @@
     try{ document.querySelector('#manualResult').textContent = 'HTTP '+r.status+' — '+JSON.stringify(JSON.parse(t), null, 2); }
     catch{ document.querySelector('#manualResult').textContent = 'HTTP '+r.status+' — '+t; }
   });
-  // Health/Pixel check
   $('#pixelCheckBtn')?.addEventListener('click', async ()=>{
     const out = document.querySelector('#pixelCheckResult'); out.textContent='Checking…';
     try{
@@ -122,7 +121,6 @@
     const r = await fetch('/admin/api/health'); const j = await r.json();
     document.querySelector('#healthOut').textContent = JSON.stringify(j, null, 2);
   });
-  // Poll
   async function poll(){
     try{
       const [cRes, sRes] = await Promise.all([ fetch('/admin/api/counters'), fetch('/admin/api/automation_status') ]);

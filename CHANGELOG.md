@@ -1,6 +1,5 @@
 # Changelog
-## v1.4.0
-- Full project bundle with ALL files.
-- Keeps admin features (automation + chaos + health + inspector + logs + live counters).
-- Client pixel beacons to `/beacon`; server CAPI from admin automation/manual.
-- Robots blocked (meta + robots.txt).
+## v1.4.1
+- **Auto-migration** for SQLite: adds `user.pw_hash` column and seeds hashes.
+- Bumped admin build badge to v1.4.1.
+- Full bundle (ALL files) for clean redeploy.

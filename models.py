@@ -6,9 +6,11 @@ from extensions import db
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), unique=True, nullable=False)
-    pw_hash = db.Column(db.String(255), nullable=False)
+    pw_hash = db.Column(db.String(255), nullable=True)
     def set_password(self, password): self.pw_hash = generate_password_hash(password)
-    def check_password(self, password): return check_password_hash(self.pw_hash, password)
+    def check_password(self, password): 
+        if not self.pw_hash: return False
+        return check_password_hash(self.pw_hash, password)
 
 class KVStore(db.Model):
     key = db.Column(db.String(128), primary_key=True)
