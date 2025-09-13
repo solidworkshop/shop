@@ -1,4 +1,4 @@
-import os, json, time, threading, random, uuid, queue, requests
+import os, json, time, threading, random, uuid, queue, requests, traceback
 from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_user, logout_user, login_required
@@ -29,6 +29,20 @@ def logout():
     _logout_user = _logout
     _logout_user()
     return redirect(url_for("admin.login"))
+
+def _as_dict(x):
+    """Coerce any JSON-ish body to a dict, else {}."""
+    if isinstance(x, dict):
+        return x
+    try:
+        return dict(x)
+    except Exception:
+        return {}
+
+def _sg(d, key, default=None):
+    """Safe get from dict-like; never subscript None."""
+    return d.get(key, default) if isinstance(d, dict) else default
+
 
 # -------------------- Helpers --------------------
 def _get_bool(key, default=False):
@@ -117,8 +131,14 @@ def send_pixel(event, status_override=None):
 from flask import request as flask_request  # add near other imports
 
 def send_capi(event):
+    # Never raise: always swallow & log errors so /api/manual_send can't 500
     if not capi_enabled() or chaos_drop():
         return ("dropped", 0, None)
+
+    start = time.time()
+    status, err = "ok", None
+    event = _as_dict(event)  # <— NEW: guarantees dict
+
 
     # --- NEW: capture UA/IP (works in admin/manual; falls back in automation) ---
     try:
