@@ -1,10 +1,11 @@
 # Changelog
 
-## v1.3.2
-- **Admin layout**: switched to a **single-column** stack to simplify scanning on smaller screens.
-- **Back to store** link added to the admin header.
-- **Pixel Check**: clearer, timestamped results in the UI.
-- **FBP fix**: when `_fbp` cookie is missing, we now generate an **ephemeral** `fb.1.*` value per request (not persisted), so it won’t be the same across all events.
-- Build badge auto-updates to **v1.3.2**.
+## v1.3.3
+- **Start with Intervals reliability & UX**
+  - API now tolerates repeated “start” clicks (returns current state instead of failing).
+  - Safer interval parsing with fallbacks; values persisted to KV.
+  - Added `/admin/api/automation/ping` to fire a one-off Purchase for debugging.
+  - UI shows inline success/error messages and disables buttons during requests.
+- Build badge set to **v1.3.3**.
 
-(Previous: v1.3.1 — events visibility helpers, catalog cost/description, auto-migrations; v1.3.0 — catalog manager; v1.2.0 — automation percentages, manual send UI, chaos toggles.)
+Tip: for thread-based automation on Render, set **WEB_CONCURRENCY=1** to avoid multiple worker processes each running their own timers.

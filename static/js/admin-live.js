@@ -1,11 +1,108 @@
 (function(){
   const $ = (sel)=>document.querySelector(sel);
 
+  function note(msg, cls='info'){
+    const box = $('#autoMsg');
+    if (!box) return;
+    box.className = 'alert alert-' + cls + ' py-2 px-3 small';
+    box.textContent = msg;
+    box.style.display = 'block';
+  }
+
+  async function refreshStatus(){
+    try{
+      const r = await fetch('/admin/api/automation_status');
+      const j = await r.json();
+      const st = $('#autoStatus');
+      if (st) {
+        st.className = 'badge ' + (j.running ? 'text-bg-success' : 'text-bg-secondary');
+        st.textContent = 'Automation: ' + (j.running ? 'Running' : 'Stopped');
+      }
+    }catch(e){}
+  }
+
+  function gatherIntervals() {
+    const names = ['PageView','ViewContent','AddToCart','InitiateCheckout','AddPaymentInfo','Purchase'];
+    const obj = {};
+    names.forEach(n=>{
+      const el = document.getElementById('interval_'+n);
+      const v = parseFloat(el?.value || '0');
+      obj['interval_'+n] = (isFinite(v) && v>0) ? v : 1.0;
+    });
+    return obj;
+  }
+
+  $('#startAuto')?.addEventListener('click', async ()=>{
+    const btn = $('#startAuto'); btn.disabled = true;
+    note('Starting automation…');
+    try{
+      const body = { cmd:'start', intervals: gatherIntervals() };
+      const r = await fetch('/admin/api/automation', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      const j = await r.json();
+      if (j.ok && j.running){
+        note('Automation started ✓', 'success');
+      } else {
+        note('Start failed: ' + (j.error || 'unknown'), 'danger');
+      }
+    } catch(e){
+      note('Request error: '+e, 'danger');
+    } finally {
+      btn.disabled = false;
+      refreshStatus();
+    }
+  });
+
+  $('#stopAuto')?.addEventListener('click', async ()=>{
+    const btn = $('#stopAuto'); btn.disabled = true;
+    note('Stopping…');
+    try{
+      const r = await fetch('/admin/api/automation', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ cmd:'stop' }) });
+      const j = await r.json();
+      if (j.ok){
+        note('Automation stopped', 'secondary');
+      } else {
+        note('Stop failed: ' + (j.error || 'unknown'), 'danger');
+      }
+    } catch(e){
+      note('Request error: '+e, 'danger');
+    } finally {
+      btn.disabled = false;
+      refreshStatus();
+    }
+  });
+
+  $('#pingAuto')?.addEventListener('click', async ()=>{
+    const btn = $('#pingAuto'); btn.disabled = true;
+    try{
+      const r = await fetch('/admin/api/automation/ping', { method:'POST' });
+      const j = await r.json();
+      if (j.ok) note('One Purchase event sent ✓', 'success');
+      else note('Ping failed', 'danger');
+    }finally{
+      btn.disabled = false;
+    }
+  });
+
+  // Manual validate & send (kept)
+  $('#btnValidate')?.addEventListener('click', ()=>{
+    const txt = $('#manualJson').value || '';
+    try { const obj = JSON.parse(txt); if (!obj.event_name || !obj.event_id) throw new Error('Missing event_name or event_id'); note('Valid ✓','success'); }
+    catch(e){ note('Invalid JSON: ' + e.message, 'danger'); }
+  });
+  $('#btnSend')?.addEventListener('click', async ()=>{
+    const txt = $('#manualJson').value || '';
+    try{ JSON.parse(txt); } catch(e){ note('Invalid JSON: ' + e.message, 'danger'); return; }
+    const r = await fetch('/admin/api/manual_send', { method:'POST', headers:{'Content-Type':'application/json'}, body: txt });
+    const t = await r.text();
+    note('HTTP '+r.status+' — '+t.slice(0,200), r.ok?'success':'danger');
+  });
+
+  // Counters poll
   async function poll() {
     try {
       const [cRes, sRes] = await Promise.all([
-        fetch('/admin/api/counters', {credentials:'same-origin'}),
-        fetch('/admin/api/automation_status', {credentials:'same-origin'})
+        fetch('/admin/api/counters'),
+        fetch('/admin/api/automation_status')
       ]);
       const c = await cRes.json();
       const s = await sRes.json();
@@ -24,134 +121,12 @@
           st.className = 'badge ' + (s.running ? 'text-bg-success' : 'text-bg-secondary');
           st.textContent = 'Automation: ' + (s.running ? 'Running' : 'Stopped');
         }
-        $('#autoPixel') && ($('#autoPixel').checked = !!s.automation_pixel);
-        $('#autoCapi') && ($('#autoCapi').checked = !!s.automation_capi);
-        $('#useTestCode') && ($('#useTestCode').checked = !!s.use_test_event_code);
-        $('#pct_profit_margin') && ($('#pct_profit_margin').value = s.pct_profit_margin ?? $('#pct_profit_margin').value);
-        $('#pct_pltv') && ($('#pct_pltv').value = s.pct_pltv ?? $('#pct_pltv').value);
       }
-    } catch(e) {
-      // ignore
-    } finally {
+    } catch(e) {} finally {
       setTimeout(poll, 1500);
     }
   }
 
-  // Intervals helpers
-  function gatherIntervals() {
-    const names = ['PageView','ViewContent','AddToCart','InitiateCheckout','AddPaymentInfo','Purchase'];
-    const obj = {};
-    names.forEach(n=>{
-      const el = document.getElementById('interval_'+n);
-      if (el) obj['interval_'+n] = parseFloat(el.value||'0') || 1.0;
-    });
-    return obj;
-  }
-
-  // Start/Stop
-  $('#startAuto')?.addEventListener('click', async ()=>{
-    const body = { cmd:'start', intervals: gatherIntervals() };
-    await fetch('/admin/api/automation', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-  });
-  $('#stopAuto')?.addEventListener('click', async ()=>{
-    await fetch('/admin/api/automation', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ cmd:'stop' }) });
-  });
-
-  // Toggles
-  $('#autoPixel')?.addEventListener('change', async (e)=>{
-    await fetch('/admin/api/settings', { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ automation_pixel: e.target.checked }) });
-  });
-  $('#autoCapi')?.addEventListener('change', async (e)=>{
-    await fetch('/admin/api/settings', { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ automation_capi: e.target.checked }) });
-  });
-  $('#useTestCode')?.addEventListener('change', async (e)=>{
-    await fetch('/admin/api/settings', { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ use_test_event_code: e.target.checked }) });
-  });
-
-  // Percent controls
-  $('#pct_profit_margin')?.addEventListener('change', async (e)=>{
-    const v = Math.max(0, Math.min(100, parseInt(e.target.value || '0', 10)));
-    e.target.value = v;
-    await fetch('/admin/api/settings', { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ pct_profit_margin: v }) });
-  });
-  $('#pct_pltv')?.addEventListener('change', async (e)=>{
-    const v = Math.max(0, Math.min(100, parseInt(e.target.value || '0', 10)));
-    e.target.value = v;
-    await fetch('/admin/api/settings', { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ pct_pltv: v }) });
-  });
-
-  // Chaos toggles
-  async function setChaos(key, value){
-    await fetch('/admin/api/chaos', { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ [key]: value })});
-  }
-  $('#chaos_drop')?.addEventListener('change', e=> setChaos('chaos_drop', e.target.checked));
-  $('#chaos_omit')?.addEventListener('change', e=> setChaos('chaos_omit', e.target.checked));
-  $('#chaos_malformed')?.addEventListener('change', e=> setChaos('chaos_malformed', e.target.checked));
-
-  // Manual Validate & Send
-  $('#btnValidate')?.addEventListener('click', ()=>{
-    const txt = $('#manualJson').value || '';
-    try {
-      const obj = JSON.parse(txt);
-      if (!obj.event_name) throw new Error('Missing "event_name"');
-      if (!obj.event_id) throw new Error('Missing "event_id"');
-      $('#manualResult').textContent = 'Valid ✓';
-    } catch(e){
-      $('#manualResult').textContent = 'Invalid JSON: ' + e.message;
-    }
-  });
-  $('#btnSend')?.addEventListener('click', async ()=>{
-    const txt = $('#manualJson').value || '';
-    try{ JSON.parse(txt); } catch(e){ $('#manualResult').textContent = 'Invalid JSON: ' + e.message; return; }
-    const r = await fetch('/admin/api/manual_send', { method:'POST', headers:{'Content-Type':'application/json'}, body: txt });
-    const t = await r.text();
-    try{ $('#manualResult').textContent = 'HTTP '+r.status+' — '+JSON.stringify(JSON.parse(t), null, 2); }
-    catch{ $('#manualResult').textContent = 'HTTP '+r.status+' — '+t; }
-  });
-  $('#btnSendLive')?.addEventListener('click', async ()=>{
-    let txt = $('#manualJson').value || '';
-    if (!txt.trim()){
-      const id = 'live-' + Math.random().toString(36).slice(2);
-      txt = JSON.stringify({event_name:'Purchase', event_id:id, currency:'USD', value:Math.round(Math.random()*200+20)});
-    }
-    try{ JSON.parse(txt); } catch(e){ $('#manualResult').textContent = 'Invalid JSON: ' + e.message; return; }
-    const r = await fetch('/admin/api/manual_send?live=1', { method:'POST', headers:{'Content-Type':'application/json'}, body: txt });
-    const t = await r.text();
-    try{ $('#manualResult').textContent = 'HTTP '+r.status+' — '+JSON.stringify(JSON.parse(t), null, 2); }
-    catch{ $('#manualResult').textContent = 'HTTP '+r.status+' — '+t; }
-  });
-
-  // Pixel checker (more obvious output)
-  $('#pixelCheckBtn')?.addEventListener('click', async ()=>{
-    const out = $('#pixelCheckResult');
-    out.textContent = 'Checking…';
-    try{
-      const r = await fetch('/admin/api/pixel-check', {method:'POST'});
-      const j = await r.json();
-      const stamp = new Date().toISOString();
-      if (j.ok) {
-        out.textContent = `[${stamp}] source: ${j.source} · noindex: ${j.has_meta_noindex ? 'yes' : 'no'} · pixel snippet: ${j.has_pixel_snippet ? 'yes' : 'no'}`;
-      } else {
-        out.textContent = `[${stamp}] Error: ` + (j.error || 'unknown');
-      }
-    } catch(e){
-      out.textContent = 'Error: ' + e;
-    }
-  });
-
-  // Health summary
-  $('#btnHealth')?.addEventListener('click', async ()=>{
-    const r = await fetch('/admin/api/health');
-    const j = await r.json();
-    $('#healthOut').textContent = JSON.stringify(j, null, 2);
-  });
-
-  // Start polling
+  refreshStatus();
   poll();
 })();
