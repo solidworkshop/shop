@@ -1,2 +1,4 @@
-## v2.6.0
-- Revert-style build: fuller admin, 12 seeded products, inspector fixed, recent events card, live counters, manual test separate from chaos.
+## v2.6.1
+- Add SQLite column migration on startup to fix legacy DBs.
+- Add /diag endpoint for quick sanity checks.
+- Keep fuller admin & 12 products from v2.6.0.

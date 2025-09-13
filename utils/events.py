@@ -1,6 +1,5 @@
 
-import os, json, time, uuid, random
-import requests
+import os, json, time, random, uuid, requests
 from urllib.parse import urljoin
 from flask import request
 from extensions import db
@@ -17,14 +16,9 @@ def graph_url(path=''):
     ver = 'v' + str(ver).lstrip('v')
     return urljoin(base, ver + '/' + path.lstrip('/'))
 
-def get_pixel_id():
-    return os.getenv('PIXEL_ID') or KVStore.get('pixel_id', '') or ''
-
-def get_access_token():
-    return os.getenv('ACCESS_TOKEN') or KVStore.get('access_token', '') or ''
-
-def get_test_event_code():
-    return os.getenv('TEST_EVENT_CODE') or KVStore.get('test_event_code', '') or ''
+def get_pixel_id(): return os.getenv('PIXEL_ID') or KVStore.get('pixel_id','') or ''
+def get_access_token(): return os.getenv('ACCESS_TOKEN') or KVStore.get('access_token','') or ''
+def get_test_event_code(): return os.getenv('TEST_EVENT_CODE') or KVStore.get('test_event_code','') or ''
 
 def chaos_behavior():
     return {
@@ -57,10 +51,8 @@ def build_user_data():
     if chaos_behavior().get("omit_user_data"): return {}
     ua = request.headers.get('User-Agent', 'python-requests/2.x')
     ip = request.headers.get('X-Forwarded-For', request.remote_addr or '127.0.0.1')
-    try:
-        ip = [p.strip() for p in (ip or '').split(',')][0] or '127.0.0.1'
-    except Exception:
-        ip = '127.0.0.1'
+    try: ip = [p.strip() for p in (ip or '').split(',')][0] or '127.0.0.1'
+    except Exception: ip = '127.0.0.1'
     fbp = request.cookies.get('_fbp')
     fbc = request.args.get('fbclid')
     ud = {"client_ip_address": ip, "client_user_agent": ua}
@@ -74,8 +66,7 @@ def build_user_data():
 
 def send_capi_event(event_name, event_id, custom_data, dry_run=False):
     if chaos_behavior().get("drop"):
-        _log("capi", event_name, event_id, "dropped", 0, json.dumps(custom_data), "chaos_drop")
-        return {"ok": True, "dropped": True}
+        _log("capi", event_name, event_id, "dropped", 0, json.dumps(custom_data), "chaos_drop"); return {"ok": True, "dropped": True}
     pixel_id = get_pixel_id(); token = get_access_token()
     if not pixel_id or not token:
         _log("capi", event_name, event_id, "skipped", 0, json.dumps(custom_data), "missing_pixel_or_token")
@@ -91,11 +82,9 @@ def send_capi_event(event_name, event_id, custom_data, dry_run=False):
     }]}
     tec = get_test_event_code()
     if tec: payload["test_event_code"] = tec
-    if chaos_behavior().get("malformed"):
-        payload = {"oops": "bad"}
+    if chaos_behavior().get("malformed"): payload = {"oops": "bad"}
     if dry_run:
-        _log("app", event_name, event_id, "dry_run", 0, json.dumps(payload), "")
-        return {"ok": True, "dry_run": True, "payload": payload}
+        _log("app", event_name, event_id, "dry_run", 0, json.dumps(payload), ""); return {"ok": True, "dry_run": True, "payload": payload}
     t0 = time.time()
     try:
         r = requests.post(url, params={"access_token": token}, json=payload, timeout=8)
@@ -103,9 +92,7 @@ def send_capi_event(event_name, event_id, custom_data, dry_run=False):
         _log("capi", event_name, event_id, "ok" if ok else f"http_{r.status_code}", dt, json.dumps(payload), "" if ok else r.text[:2000])
         return {"ok": ok, "status": r.status_code, "resp": r.text}
     except Exception as e:
-        dt = int((time.time()-t0)*1000)
-        _log("capi", event_name, event_id, "exception", dt, json.dumps(payload), str(e)[:1000])
-        return {"ok": False, "error": str(e)}
+        dt = int((time.time()-t0)*1000); _log("capi", event_name, event_id, "exception", dt, json.dumps(payload), str(e)[:1000]); return {"ok": False, "error": str(e)}
 
 def _log(channel, event_name, event_id, status, latency_ms, payload, error):
     try:

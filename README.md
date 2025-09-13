@@ -1,7 +1,7 @@
 
-# Shop + Pixel/CAPI Tester (v2.6.0)
+# Shop + Pixel/CAPI Tester (v2.6.1)
 
-"Revert-style" restore: rich admin, 12 products, working inspector, separate Manual Test, Recent Events panel, live counters.
+Revert-style build + robust SQLite migration to avoid column-missing crashes on deploy. Full admin, 12 products, live counters, inspector, recent events, chaos, manual send, health checks.
 
 ## Env
 SECRET_KEY=change-me
@@ -16,3 +16,6 @@ TEST_EVENT_CODE=
 Build: pip install -r requirements.txt
 Start: gunicorn -k gthread -w 1 -b 0.0.0.0:$PORT app:app
 Health: /healthz
+
+## Diag
+/diag returns build, env presence flags, and DB counts.

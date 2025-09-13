@@ -1,5 +1,5 @@
 
-import os, json, uuid, threading, time
+import uuid, threading, time, json
 from flask import Blueprint, render_template, request, redirect, url_for
 from flask_login import login_user, logout_user, login_required
 from sqlalchemy import text
@@ -10,8 +10,7 @@ from utils.events import send_capi_event, get_pixel_id, get_test_event_code, STA
 admin_bp = Blueprint("admin", __name__, template_folder="../templates/admin")
 
 @login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
+def load_user(user_id): return User.query.get(int(user_id))
 
 # Auth
 @admin_bp.route("/login", methods=["GET","POST"])
@@ -25,8 +24,7 @@ def login():
 
 @admin_bp.route("/logout")
 @login_required
-def logout():
-    logout_user(); return redirect(url_for("admin.login"))
+def logout(): logout_user(); return redirect(url_for("admin.login"))
 
 def counters_snapshot():
     px = EventLog.query.filter_by(channel="pixel", status="ok").count()
@@ -53,14 +51,12 @@ def dashboard():
         cfg=cfg, ev_toggles=ev_toggles, running=running,
         counters=counters_snapshot(),
         pixel_id=get_pixel_id(), test_event_code=get_test_event_code(),
-        standard_events=STANDARD_EVENTS, build="v2.6.0")
+        standard_events=STANDARD_EVENTS, build="v2.6.1")
 
 @admin_bp.route("/counters")
 @login_required
 def counters_api():
-    d = counters_snapshot()
-    d["running"] = KVStore.get("automation_running","0") == "1"
-    return d
+    d = counters_snapshot(); d["running"] = KVStore.get("automation_running","0") == "1"; return d
 
 @admin_bp.route("/recent-events")
 @login_required
@@ -81,7 +77,7 @@ def settings_save():
 @login_required
 def admin_catalog():
     products = Product.query.order_by(Product.id.asc()).all()
-    return render_template("admin/catalog.html", products=products, build="v2.6.0")
+    return render_template("admin/catalog.html", products=products, build="v2.6.1")
 
 @admin_bp.route("/catalog/save", methods=["POST"])
 @login_required
@@ -105,13 +101,13 @@ def admin_catalog_save():
 @login_required
 def inspector():
     last = EventLog.query.order_by(EventLog.ts.desc()).limit(100).all()
-    return render_template("admin/inspector.html", rows=last, build="v2.6.0")
+    return render_template("admin/inspector.html", rows=last, build="v2.6.1")
 
 @admin_bp.route("/logs")
 @login_required
 def logs_view():
     last = EventLog.query.order_by(EventLog.ts.desc()).limit(500).all()
-    return render_template("admin/logs.html", rows=last, build="v2.6.0")
+    return render_template("admin/logs.html", rows=last, build="v2.6.1")
 
 # Health & Pixel check
 @admin_bp.route("/pixel-check")
@@ -120,7 +116,7 @@ def pixel_check():
     ok = bool(get_pixel_id())
     return {"ok": ok, "pixel": "ok" if ok else "missing"}, 200
 
-# Manual send (separate from chaos)
+# Manual send
 @admin_bp.route("/manual_send", methods=["POST"])
 @login_required
 def manual_send():
@@ -135,12 +131,12 @@ def manual_send():
     except Exception as e:
         return {"ok": False, "error": str(e)}, 500
 
-# Automation engine
+# Automation
 _threads = []; _stop = False
 
 def _qps_ok(bucket, cap):
     import time
-    now = time.time(); # sliding 1s window using list of timestamps in KVStore not necessary; per-thread memory ok
+    now = time.time()
     while bucket and now - bucket[0] > 1.0: bucket.pop(0)
     if cap <= 0: return True
     if len(bucket) < cap: bucket.append(now); return True
