@@ -1,57 +1,45 @@
-#!/usr/bin/env python3
-import os, threading, time
-from datetime import datetime
-from flask import Flask, send_from_directory, Response, render_template
-try:
-    from flask_migrate import Migrate  # optional
-except Exception:
-    Migrate = lambda *a, **k: None  # no-op if not available
-from dotenv import load_dotenv
-
-from extensions import db, login_manager
+from flask import Flask
 from config import Config
-from models import ensure_seed_admin, KVStore
-
-# Blueprints
-from shop.routes import shop_bp
+from extensions import db, login_manager
+from models import User, Product
 from admin.routes import admin_bp
-
-load_dotenv()
+from shop.routes import shop_bp
+import os, random, string
 
 def create_app():
-    app = Flask(__name__, template_folder="templates", static_folder="static")
-    app.config.from_object(Config())
-
+    app = Flask(__name__, static_folder="static", template_folder="templates")
+    app.config.from_object(Config)
     db.init_app(app)
-    Migrate(app, db)  # safe even if it's the no-op
-
     login_manager.init_app(app)
+
+    @login_manager.user_loader
+    def load_user(uid):
+        from models import User
+        return db.session.get(User, int(uid))
+
+    with app.app_context():
+        db.create_all()
+        if not User.query.first():
+            u = User(username=os.getenv("ADMIN_USERNAME","admin"))
+            u.set_password(os.getenv("ADMIN_PASSWORD","admin123"))
+            db.session.add(u); db.session.commit()
+        if Product.query.count()==0:
+            for i in range(12):
+                name=f"Demo Product {i+1}"; slug=f"demo-product-{i+1}"
+                price=round(random.uniform(10,200),2)
+                cost=round(price*random.uniform(0.5,0.9),2)
+                p=Product(sku="SKU-"+''.join(random.choices(string.digits,k=6)), slug=slug, name=name,
+                          price=price, cost=cost, currency="USD",
+                          description="<p>Great demo item.</p>",
+                          image_url=f"https://picsum.photos/seed/{i+10}/600/600")
+                db.session.add(p)
+            db.session.commit()
 
     app.register_blueprint(shop_bp)
     app.register_blueprint(admin_bp, url_prefix="/admin")
-
-    @app.after_request
-    def add_noindex(response):
-        response.headers['X-Robots-Tag'] = 'noindex, nofollow, noarchive, nosnippet'
-        return response
-
-    @app.route("/robots.txt")
-    def robots():
-        text = "User-agent: *\nDisallow: /\n"
-        return Response(text, mimetype="text/plain")
-
-    @app.route("/healthz")
-    def healthz():
-        return {"ok": True, "time": datetime.utcnow().isoformat()}
-
-    with app.app_context():
-        ensure_seed_admin()
-        KVStore.set("build_number", os.getenv("BUILD_NUMBER", "v1.0.0"))
-        KVStore.set("graph_version", os.getenv("GRAPH_VER", "v20.0"))
-
     return app
 
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+    app.run(debug=True)

@@ -1,26 +1,6 @@
 (function(){
-  const url = "/pixel-collect";
-  function send(evtName, meta){
-    const data = Object.assign({
-      event_name: evtName || "PageView",
-      event_id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()
-    }, meta || {});
-    try {
-      if (navigator.sendBeacon){
-        const blob = new Blob([JSON.stringify(data)], {type: "application/json"});
-        navigator.sendBeacon(url, blob);
-      } else {
-        fetch(url, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(data)});
-      }
-    } catch(e){ /* swallow */ }
-  }
-  window.demoPixel = send;
-  // Auto-fire PageView after fetching settings (to respect toggles remotely)
-  try {
-    fetch('/admin/api/settings').then(r=>r.json()).then(s=>{
-      if (s.pixel_enabled && s.ev_PageView){
-        send("PageView", {path: location.pathname});
-      }
-    });
-  } catch(e){ /* ignore */ }
+  function uuid(){ return 'xxxxxxxxxxxx4xxxyxxxxxxxxxxxxxxx'.replace(/[xy]/g, c=>{const r=Math.random()*16|0,v=c=='x'?r:(r&0x3|0x8);return v.toString(16);}); }
+  function post(url, obj){ return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(obj)}).catch(()=>{}); }
+  const api = { track: function(name, params){ try{ const payload=Object.assign({event_name:name,event_id:uuid(),ts:Date.now(),path:location.pathname}, params||{}); post('/beacon', payload);}catch(e){} } };
+  window.demopixel = api; api.track('PageView');
 })();
