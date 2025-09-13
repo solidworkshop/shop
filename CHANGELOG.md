@@ -42,3 +42,8 @@
 - Clean rewrite of app.py to resolve SyntaxError from prior patching.
 - Keeps WAL, retries, diagnostics, and health endpoints.
 - Build badge v1.4.11.
+
+## v1.4.12
+- Fix: global exception handler now **skips** `HTTPException` so redirects/404s work.
+- Add `/admin/health` endpoint for quick admin readiness check.
+- Build badge v1.4.12.

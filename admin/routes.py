@@ -65,6 +65,10 @@ def login():
 def logout():
     logout_user(); return redirect(url_for("admin.login"))
 
+@admin_bp.route("/health")
+def admin_health():
+    return {"ok": True, "build": KVStore.get("build_number","unknown")}, 200
+
 def send_pixel(event):
     if not pixel_enabled() or chaos_drop(): return ("dropped",0,None)
     start=time.time()
@@ -155,9 +159,9 @@ def send_capi(event, force_live=False):
 @admin_bp.route("/")
 @login_required
 def dashboard():
-    KVStore.set("build_number","v1.4.11")
+    KVStore.set("build_number","v1.4.12")
     c=Counters.get_or_create()
-    build=KVStore.get("build_number","v1.4.11")
+    build=KVStore.get("build_number","v1.4.12")
     recent=EventLog.query.order_by(desc(EventLog.ts)).limit(20).all()
     defaults={"PageView":1.5,"ViewContent":2.0,"AddToCart":3.5,"InitiateCheckout":4.0,"AddPaymentInfo":5.0,"Purchase":6.0}
     user_intervals={n: float(KVStore.get(f"interval_{n}", d)) for n,d in defaults.items()}

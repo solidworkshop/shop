@@ -7,6 +7,7 @@ from models import User, Product, KVStore, EventLog
 from admin.routes import admin_bp
 from shop.routes import shop_bp
 from werkzeug.security import generate_password_hash
+from werkzeug.exceptions import HTTPException
 
 def _retry(fn, attempts=5, delay=0.1):
     for i in range(attempts):
@@ -155,6 +156,8 @@ def create_app():
     # Global error handlers
     @app.errorhandler(Exception)
     def on_any_exception(e):
+        if isinstance(e, HTTPException):
+            return e
         tb = ''.join(traceback.format_exception(None, e, e.__traceback__))
         try:
             ev = EventLog(channel="app", event_name="exception", status="500", latency_ms=0, payload="", error=tb[:4000])
