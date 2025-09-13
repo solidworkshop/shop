@@ -1,7 +1,6 @@
 (function(){
   const $ = (sel)=>document.querySelector(sel);
 
-  // Live counters + status
   async function poll() {
     try {
       const [cRes, sRes] = await Promise.all([
@@ -16,8 +15,8 @@
         set('#countPixel', c.pixel);
         set('#countCapi', c.capi);
         set('#countDedup', c.dedup);
-        set('#sumMargin', (c.margin_sum||0).toFixed(2));
-        set('#sumPLTV', (c.pltv_sum||0).toFixed(2));
+        set('#countMarginEvents', c.margin_events || 0);
+        set('#countPLTVEvents', c.pltv_events || 0);
       }
       if (s && s.ok) {
         const st = $('#autoStatus');
@@ -25,15 +24,16 @@
           st.className = 'badge ' + (s.running ? 'text-bg-success' : 'text-bg-secondary');
           st.textContent = 'Automation: ' + (s.running ? 'Running' : 'Stopped');
         }
+        const ap = $('#autoPixel'); if (ap) ap.checked = !!s.automation_pixel;
+        const ac = $('#autoCapi');  if (ac) ac.checked = !!s.automation_capi;
       }
     } catch(e) {
-      // swallow
+      // ignore
     } finally {
       setTimeout(poll, 1500);
     }
   }
 
-  // Wire automation buttons
   function gatherIntervals() {
     const names = ['PageView','ViewContent','AddToCart','InitiateCheckout','AddPaymentInfo','Purchase'];
     const obj = {};
@@ -44,23 +44,27 @@
     return obj;
   }
 
+  // Start/Stop
   const startBtn = $('#startAuto');
   if (startBtn) startBtn.addEventListener('click', async ()=>{
     const body = { cmd:'start', intervals: gatherIntervals() };
-    const r = await fetch('/admin/api/automation', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(body)
-    });
-    await r.json();
+    await fetch('/admin/api/automation', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
   });
-
   const stopBtn = $('#stopAuto');
   if (stopBtn) stopBtn.addEventListener('click', async ()=>{
-    const r = await fetch('/admin/api/automation', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ cmd:'stop' })
-    });
-    await r.json();
+    await fetch('/admin/api/automation', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ cmd:'stop' }) });
+  });
+
+  // Channel toggles (automation only)
+  const autoPixel = $('#autoPixel');
+  if (autoPixel) autoPixel.addEventListener('change', async ()=>{
+    await fetch('/admin/api/settings', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ automation_pixel: autoPixel.checked }) });
+  });
+  const autoCapi = $('#autoCapi');
+  if (autoCapi) autoCapi.addEventListener('change', async ()=>{
+    await fetch('/admin/api/settings', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ automation_capi: autoCapi.checked }) });
   });
 
   // Pixel checker
@@ -80,6 +84,6 @@
     }
   });
 
-  // Kick off polling
+  // Start polling
   poll();
 })();
