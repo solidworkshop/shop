@@ -1,2 +1,2 @@
-## v1.6.0
-- Fresh working bundle with admin, automation, and catalog.
+## v2.0.0
+- Complete bundle with Pixel + CAPI, automation, inspector, chaos, counters, catalog, health, logs.

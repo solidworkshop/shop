@@ -1,9 +1,9 @@
 
-import os, sys
-from flask import Flask, jsonify, render_template
+import os
+from flask import Flask, jsonify, render_template, request, make_response, session, redirect, url_for
 from flask_cors import CORS
 from extensions import db, login_manager
-from models import User, Product, KVStore
+from models import User, Product, KVStore, EventLog
 
 DB_PATH = "/var/tmp/app.db"
 
@@ -29,17 +29,51 @@ def create_app():
     @app.route("/healthz")
     def healthz(): return "ok", 200
 
+    @app.after_request
+    def add_noindex(resp):
+        resp.headers["X-Robots-Tag"] = "noindex, nofollow"
+        return resp
+
+    # ---------- Public shop ----------
     @app.route("/")
-    def index(): return render_template("public/home.html", build="v1.6.0")
+    def home():
+        products = Product.query.all()
+        return render_template("public/home.html", products=products, build="v2.0.0")
+
+    @app.route("/p/<slug>")
+    def product_detail(slug):
+        p = Product.query.filter_by(slug=slug).first_or_404()
+        return render_template("public/product.html", p=p, build="v2.0.0")
+
+    @app.route("/cart/add/<int:pid>", methods=["POST"])
+    def cart_add(pid):
+        cart = session.get("cart", {})
+        cart[str(pid)] = cart.get(str(pid), 0) + 1
+        session["cart"] = cart
+        return redirect(url_for("home"))
+
+    @app.route("/checkout", methods=["GET","POST"])
+    def checkout():
+        if request.method == "POST":
+            # simulate purchase
+            session["cart"] = {}
+            return render_template("public/thanks.html", build="v2.0.0")
+        return render_template("public/checkout.html", build="v2.0.0")
 
     @app.route("/about")
-    def about(): return render_template("public/about.html", build="v1.6.0")
+    def about(): return render_template("public/about.html", build="v2.0.0")
 
     @app.route("/faq")
-    def faq(): return render_template("public/faq.html", build="v1.6.0")
+    def faq(): return render_template("public/faq.html", build="v2.0.0")
 
     @app.route("/contact")
-    def contact(): return render_template("public/contact.html", build="v1.6.0")
+    def contact(): return render_template("public/contact.html", build="v2.0.0")
+
+    @app.route("/robots.txt")
+    def robots():
+        resp = make_response("User-agent: *\nDisallow: /\n", 200)
+        resp.mimetype = "text/plain"
+        return resp
 
     return app
 
