@@ -1,4 +1,4 @@
-import json, uuid, time, traceback, requests, random, threading
+import json, uuid, time, traceback, requests, random, threading, ipaddress
 from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_user, logout_user, login_required
@@ -144,6 +144,20 @@ def send_pixel(event, status_override=None):
             pass
         return ("error", 0, str(e)[:1000])
 
+def _clean_ip(raw):
+    """Return a valid IPv4/IPv6 string or None."""
+    if not raw:
+        return None
+    ip = raw.split(",")[0].strip()  # take first from XFF chain
+    # Strip :port for IPv4 "x.x.x.x:port"; preserve IPv6 format (may contain colons)
+    if "." in ip and ip.count(":") == 1:
+        ip = ip.split(":")[0]
+    try:
+        ipaddress.ip_address(ip)
+        return ip
+    except Exception:
+        return None
+
 def send_capi(event):
     # Fully defensive: never raise
     event = _as_dict(event)
@@ -153,16 +167,17 @@ def send_capi(event):
     start = time.time()
     status, err = "ok", None
 
-    # Minimal user_data for website events (avoids 2804050)
+    # Minimal user_data for website events (avoids 2804050). Clean invalid IPs.
     try:
         ua = request.headers.get("User-Agent", "") if request else ""
-        ip = (request.headers.get("X-Forwarded-For", "") or (request.remote_addr or "")) if request else ""
+        ip_raw = (request.headers.get("X-Forwarded-For", "") or (request.remote_addr or "")) if request else ""
         fbp = request.cookies.get("_fbp") if request else None
         fbc = request.cookies.get("_fbc") if request else None
     except Exception:
-        ua, ip, fbp, fbc = "Mozilla/5.0 (Server Automation)", "127.0.0.1", None, None
+        ua, ip_raw, fbp, fbc = "Mozilla/5.0 (Server Automation)", "", None, None
     if not ua:
         ua = "Mozilla/5.0"
+    clean_ip = _clean_ip(ip_raw)
 
     url = f"https://graph.facebook.com/{getattr(Config,'GRAPH_VER','v20.0')}/{getattr(Config,'PIXEL_ID','')}/events"
     data = {
@@ -174,7 +189,7 @@ def send_capi(event):
             "event_source_url": (getattr(Config,'BASE_URL',None) or "https://example.com"),
             "user_data": {
                 "client_user_agent": ua,
-                "client_ip_address": ip,
+                **({"client_ip_address": clean_ip} if clean_ip else {}),
                 **({"fbp": fbp} if fbp else {}),
                 **({"fbc": fbc} if fbc else {}),
             },
