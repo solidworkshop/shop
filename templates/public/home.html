@@ -11,11 +11,9 @@ n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
 n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
 t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window, document,'script',
 'https://connect.facebook.net/en_US/fbevents.js');
-fbq('init','{{ pixel_id }}');
-fbq('track','PageView');
+fbq('init','{{ pixel_id }}'); fbq('track','PageView');
 </script>
-<noscript><img height="1" width="1" style="display:none"
-src="https://www.facebook.com/tr?id={{ pixel_id }}&ev=PageView&noscript=1"/></noscript>
+<noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id={{ pixel_id }}&ev=PageView&noscript=1"/></noscript>
 {% endif %}
 
 </head><body>
@@ -27,7 +25,7 @@ src="https://www.facebook.com/tr?id={{ pixel_id }}&ev=PageView&noscript=1"/></no
     <a class="nav-link" href="/contact">Contact</a>
     <a class="nav-link" href="/admin/login">Admin</a>
   </div>
-  <span class="badge text-bg-secondary ms-auto">v2.5.0</span>
+  <span class="badge text-bg-secondary ms-auto">v2.6.0</span>
 </div></nav>
 <div class="container">
   <h1 class="h4 mb-3">Products</h1>

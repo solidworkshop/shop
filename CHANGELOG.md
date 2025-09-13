@@ -1,3 +1,2 @@
-## v2.5.0
-- Restored comprehensive admin with toggles, QPS caps, concurrency, chaos, manual send (dry-run), counters, inspector, logs, catalog.
-- Live polling for status/counters. Health & Pixel Check.
+## v2.6.0
+- Revert-style build: fuller admin, 12 seeded products, inspector fixed, recent events card, live counters, manual test separate from chaos.

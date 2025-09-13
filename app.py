@@ -3,7 +3,7 @@ import os
 from flask import Flask, render_template, request, make_response, session, redirect, url_for
 from flask_cors import CORS
 from extensions import db, login_manager
-from models import User, Product, KVStore
+from models import User, Product
 
 DB_PATH = "/var/tmp/app.db"
 
@@ -27,23 +27,22 @@ def create_app():
     app.register_blueprint(admin_bp, url_prefix="/admin")
 
     @app.route("/healthz")
-    def healthz(): return "ok v2.5.0", 200
+    def healthz(): return "ok v2.6.0", 200
 
     @app.after_request
     def add_noindex(resp):
         resp.headers["X-Robots-Tag"] = "noindex, nofollow"
         return resp
 
-    # Public store
     @app.route("/")
     def home():
         products = Product.query.all()
-        return render_template("public/home.html", products=products, build="v2.5.0", pixel_id=os.getenv("PIXEL_ID",""))
+        return render_template("public/home.html", products=products, build="v2.6.0", pixel_id=os.getenv("PIXEL_ID",""))
 
     @app.route("/p/<slug>")
     def product_detail(slug):
         p = Product.query.filter_by(slug=slug).first_or_404()
-        return render_template("public/product.html", p=p, build="v2.5.0", pixel_id=os.getenv("PIXEL_ID",""))
+        return render_template("public/product.html", p=p, build="v2.6.0", pixel_id=os.getenv("PIXEL_ID",""))
 
     @app.route("/cart/add/<int:pid>", methods=["POST"])
     def cart_add(pid):
@@ -56,17 +55,17 @@ def create_app():
     def checkout():
         if request.method == "POST":
             session["cart"] = {}
-            return render_template("public/thanks.html", build="v2.5.0", pixel_id=os.getenv("PIXEL_ID",""))
-        return render_template("public/checkout.html", build="v2.5.0", pixel_id=os.getenv("PIXEL_ID",""))
+            return render_template("public/thanks.html", build="v2.6.0", pixel_id=os.getenv("PIXEL_ID",""))
+        return render_template("public/checkout.html", build="v2.6.0", pixel_id=os.getenv("PIXEL_ID",""))
 
     @app.route("/about")
-    def about(): return render_template("public/about.html", build="v2.5.0", pixel_id=os.getenv("PIXEL_ID",""))
+    def about(): return render_template("public/about.html", build="v2.6.0", pixel_id=os.getenv("PIXEL_ID",""))
 
     @app.route("/faq")
-    def faq(): return render_template("public/faq.html", build="v2.5.0", pixel_id=os.getenv("PIXEL_ID",""))
+    def faq(): return render_template("public/faq.html", build="v2.6.0", pixel_id=os.getenv("PIXEL_ID",""))
 
     @app.route("/contact")
-    def contact(): return render_template("public/contact.html", build="v2.5.0", pixel_id=os.getenv("PIXEL_ID",""))
+    def contact(): return render_template("public/contact.html", build="v2.6.0", pixel_id=os.getenv("PIXEL_ID",""))
 
     @app.route("/robots.txt")
     def robots():
@@ -78,27 +77,34 @@ def create_app():
 
 def seed_admin():
     from models import User
-    username = os.getenv("ADMIN_USERNAME","admin")
-    password = os.getenv("ADMIN_PASSWORD","admin123")
-    u = User.query.filter_by(username=username).first()
+    u = User.query.filter_by(username=os.getenv("ADMIN_USERNAME","admin")).first()
     if not u:
-        u = User(username=username); u.set_password(password)
+        u = User(username=os.getenv("ADMIN_USERNAME","admin"))
+        u.set_password(os.getenv("ADMIN_PASSWORD","admin123"))
         db.session.add(u); db.session.commit()
 
 def seed_products():
     from models import Product
     if Product.query.count() == 0:
         items = [
-            dict(sku="SKU-1", slug="widget-alpha", name="Widget Alpha", price=19.99, cost=8.50, currency="USD",
-                 description="<p>Lightweight, reliable widget.</p>", image_url="https://picsum.photos/seed/alpha/600/400"),
-            dict(sku="SKU-2", slug="widget-beta", name="Widget Beta", price=39.99, cost=16.00, currency="USD",
-                 description="<p>Next-gen widget with extras.</p>", image_url="https://picsum.photos/seed/beta/600/400"),
+            ("SKU-1","widget-alpha","Widget Alpha",19.99,8.50,"USD","<p>Lightweight, reliable widget.</p>","https://picsum.photos/seed/alpha/600/400"),
+            ("SKU-2","widget-beta","Widget Beta",29.99,12.00,"USD","<p>Next-gen widget with extras.</p>","https://picsum.photos/seed/beta/600/400"),
+            ("SKU-3","widget-gamma","Widget Gamma",24.99,10.00,"USD","<p>Popular mid-range widget.</p>","https://picsum.photos/seed/gamma/600/400"),
+            ("SKU-4","widget-delta","Widget Delta",49.99,22.00,"USD","<p>Premium performance widget.</p>","https://picsum.photos/seed/delta/600/400"),
+            ("SKU-5","widget-epsilon","Widget Epsilon",14.99,6.00,"USD","<p>Budget friendly widget.</p>","https://picsum.photos/seed/eps/600/400"),
+            ("SKU-6","widget-zeta","Widget Zeta",34.99,15.00,"USD","<p>Compact and sturdy.</p>","https://picsum.photos/seed/zeta/600/400"),
+            ("SKU-7","widget-eta","Widget Eta",54.99,24.00,"USD","<p>Professional-grade widget.</p>","https://picsum.photos/seed/eta/600/400"),
+            ("SKU-8","widget-theta","Widget Theta",18.99,7.50,"USD","<p>Great for daily use.</p>","https://picsum.photos/seed/theta/600/400"),
+            ("SKU-9","widget-iota","Widget Iota",22.50,9.50,"USD","<p>Balanced features.</p>","https://picsum.photos/seed/iota/600/400"),
+            ("SKU-10","widget-kappa","Widget Kappa",31.00,13.00,"USD","<p>Robust and versatile.</p>","https://picsum.photos/seed/kappa/600/400"),
+            ("SKU-11","widget-lambda","Widget Lambda",27.75,11.25,"USD","<p>Reliable everyday tool.</p>","https://picsum.photos/seed/lambda/600/400"),
+            ("SKU-12","widget-mu","Widget Mu",42.00,18.00,"USD","<p>Advanced capabilities.</p>","https://picsum.photos/seed/mu/600/400"),
         ]
-        for it in items:
-            p = Product(**it); db.session.add(p)
+        for sku,slug,name,price,cost,curr,desc,img in items:
+            db.session.add(Product(sku=sku,slug=slug,name=name,price=price,cost=cost,currency=curr,description=desc,image_url=img))
         db.session.commit()
 
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")))
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT","5000")))

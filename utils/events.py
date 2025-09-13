@@ -1,5 +1,5 @@
 
-import os, json, time, uuid, random, ipaddress
+import os, json, time, uuid, random
 import requests
 from urllib.parse import urljoin
 from flask import request
@@ -59,7 +59,6 @@ def build_user_data():
     ip = request.headers.get('X-Forwarded-For', request.remote_addr or '127.0.0.1')
     try:
         ip = [p.strip() for p in (ip or '').split(',')][0] or '127.0.0.1'
-        import ipaddress as _ip; _ip.ip_address(ip)
     except Exception:
         ip = '127.0.0.1'
     fbp = request.cookies.get('_fbp')
@@ -73,26 +72,14 @@ def build_user_data():
     if phone: ud["ph"] = phone
     return ud
 
-def validate_payload(payload):
-    # Minimal validator to surface issues quickly
-    if not isinstance(payload, dict): return False, "payload not dict"
-    if "data" not in payload: return False, "missing data"
-    if not isinstance(payload["data"], list) or not payload["data"]: return False, "data must be non-empty list"
-    ev = payload["data"][0]
-    for k in ["event_name","event_time","action_source"]:
-        if k not in ev: return False, f"missing {k}"
-    return True, ""
-
 def send_capi_event(event_name, event_id, custom_data, dry_run=False):
     if chaos_behavior().get("drop"):
         _log("capi", event_name, event_id, "dropped", 0, json.dumps(custom_data), "chaos_drop")
         return {"ok": True, "dropped": True}
-
     pixel_id = get_pixel_id(); token = get_access_token()
     if not pixel_id or not token:
         _log("capi", event_name, event_id, "skipped", 0, json.dumps(custom_data), "missing_pixel_or_token")
         return {"ok": False, "error": "missing_pixel_or_token"}
-
     url = graph_url(f"{pixel_id}/events")
     payload = {"data": [{
         "event_name": event_name,
@@ -106,15 +93,9 @@ def send_capi_event(event_name, event_id, custom_data, dry_run=False):
     if tec: payload["test_event_code"] = tec
     if chaos_behavior().get("malformed"):
         payload = {"oops": "bad"}
-
-    okv, msg = validate_payload({"data":[{"event_name":event_name,"event_time":int(time.time()),"action_source":"website"}]})
-    if not okv:
-        _log("app", event_name, event_id, "invalid", 0, json.dumps(payload), msg)
-
     if dry_run:
         _log("app", event_name, event_id, "dry_run", 0, json.dumps(payload), "")
         return {"ok": True, "dry_run": True, "payload": payload}
-
     t0 = time.time()
     try:
         r = requests.post(url, params={"access_token": token}, json=payload, timeout=8)

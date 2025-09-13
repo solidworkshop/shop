@@ -1,7 +1,7 @@
 
-# Shop + Pixel/CAPI Tester (v2.5.0)
+# Shop + Pixel/CAPI Tester (v2.6.0)
 
-**Restored rich Admin** (master channel switches, per-event toggles, QPS caps, concurrency, chaos, manual JSON with dry-run), plus Inspector, Logs, Catalog, live counters, and health checks. Public store pages included.
+"Revert-style" restore: rich admin, 12 products, working inspector, separate Manual Test, Recent Events panel, live counters.
 
 ## Env
 SECRET_KEY=change-me

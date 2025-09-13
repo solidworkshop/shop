@@ -30,7 +30,7 @@ class EventLog(db.Model):
     event_id = db.Column(db.String(128), index=True)
     status = db.Column(db.String(32))
     latency_ms = db.Column(db.Integer, default=0)
-    payload = db.Column(db.Text)  # raw JSON
+    payload = db.Column(db.Text)
     error = db.Column(db.Text)
 
 class KVStore(db.Model):
@@ -44,8 +44,7 @@ class KVStore(db.Model):
     def set(k, v):
         row = KVStore.query.filter_by(key=k).first()
         if not row:
-            row = KVStore(key=k, val=str(v))
-            db.session.add(row)
+            row = KVStore(key=k, val=str(v)); db.session.add(row)
         else:
             row.val = str(v)
         db.session.commit()
