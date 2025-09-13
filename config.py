@@ -10,3 +10,5 @@ class Config:
     TEST_EVENT_CODE = os.getenv("TEST_EVENT_CODE","")
     RATE_LIMIT_QPS_PIXEL = float(os.getenv("RATE_LIMIT_QPS_PIXEL","10"))
     RATE_LIMIT_QPS_CAPI  = float(os.getenv("RATE_LIMIT_QPS_CAPI","5"))
+
+    SQLALCHEMY_ENGINE_OPTIONS = {'pool_pre_ping': True, 'pool_recycle': 280}

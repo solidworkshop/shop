@@ -1,7 +1,8 @@
-from flask import Flask
+import logging, sys, traceback
+from flask import Flask, jsonify, render_template
 from config import Config
 from extensions import db, login_manager
-from models import User, Product
+from models import User, Product, KVStore, EventLog
 from admin.routes import admin_bp
 from shop.routes import shop_bp
 import os, random, string
@@ -9,8 +10,16 @@ from werkzeug.security import generate_password_hash
 
 def robust_sqlite_migration(app):
     # Use engine.begin() to avoid nested transactions. No manual BEGIN/COMMIT.
-    from sqlalchemy import text
+    from sqlalchemy import event
     with app.app_context():
+        # Ensure WAL mode for better concurrency on Render
+        try:
+            with db.engine.begin() as conn:
+                conn.exec_driver_sql("PRAGMA journal_mode=WAL")
+                conn.exec_driver_sql("PRAGMA synchronous=NORMAL")
+        except Exception:
+            pass
+
         # USER: add pw_hash column if missing and seed hashes if blank
         with db.engine.begin() as conn:
             try:
@@ -25,6 +34,7 @@ def robust_sqlite_migration(app):
                 res = conn.exec_driver_sql("SELECT id, pw_hash FROM user").all()
                 for uid, pwh in res:
                     if pwh is None or pwh == "":
+                        from werkzeug.security import generate_password_hash
                         hashed = generate_password_hash(os.getenv("ADMIN_PASSWORD","admin123"))
                         conn.exec_driver_sql("UPDATE user SET pw_hash = :h WHERE id = :i", {"h": hashed, "i": uid})
             except Exception:
@@ -80,6 +90,13 @@ def robust_sqlite_migration(app):
 def create_app():
     app = Flask(__name__, static_folder="static", template_folder="templates")
     app.config.from_object(Config)
+
+    # Basic logging to stdout so Render logs show traces
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.INFO)
+    app.logger.setLevel(logging.INFO)
+    app.logger.addHandler(handler)
+
     db.init_app(app)
     login_manager.init_app(app)
 
@@ -88,7 +105,7 @@ def create_app():
         from models import User
         return db.session.get(User, int(uid))
 
-    # Health endpoints must be defined on the actual app instance
+    # Health endpoints
     @app.route("/healthz", methods=["GET", "HEAD"])
     def healthz():
         return "ok", 200
@@ -97,30 +114,68 @@ def create_app():
     def health():
         return "ok", 200
 
-    with app.app_context():
-        db.create_all()
-        robust_sqlite_migration(app)
-        db.create_all()
-        if not User.query.first():
-            u = User(username=os.getenv("ADMIN_USERNAME","admin"))
-            u.set_password(os.getenv("ADMIN_PASSWORD","admin123"))
-            db.session.add(u); db.session.commit()
-        from sqlalchemy import text
+    # Diagnostics endpoints (no auth, lightweight)
+    @app.route("/_diag/env")
+    def diag_env():
+        keys = ["PIXEL_ID","ACCESS_TOKEN","GRAPH_VER","BASE_URL","TEST_EVENT_CODE","FLASK_ENV"]
+        return jsonify({k: bool(os.getenv(k)) for k in keys})
+
+    @app.route("/_diag/db")
+    def diag_db():
         try:
-            count = db.session.execute(text("SELECT COUNT(1) FROM product")).scalar_one()
+            with db.engine.begin() as conn:
+                mode = conn.exec_driver_sql("PRAGMA journal_mode").scalar()
+            return jsonify({"ok": True, "journal_mode": mode})
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 500
+
+    # Global error handler
+    @app.errorhandler(500)
+    def on_500(e):
+        # Log traceback and store a row so admin can see it
+        tb = ''.join(traceback.format_exception(None, e, e.__traceback__))
+        try:
+            ev = EventLog(channel="app", event_name="error", status="500", latency_ms=0, payload="", error=tb[:2000])
+            db.session.add(ev); db.session.commit()
         except Exception:
-            count = 0
-        if count == 0:
-            for i in range(12):
-                name=f"Demo Product {i+1}"; slug=f"demo-product-{i+1}"
-                price=round(random.uniform(10,200),2)
-                cost=round(price*random.uniform(0.5,0.9),2)
-                p=Product(sku="SKU-"+''.join(random.choices(string.digits,k=6)), slug=slug, name=name,
-                          price=price, cost=cost, currency="USD",
-                          description="<p>Great demo item.</p>",
-                          image_url=f"https://picsum.photos/seed/{i+10}/600/600")
-                db.session.add(p)
-            db.session.commit()
+            pass
+        try:
+            return render_template("500.html", error=str(e)), 500
+        except Exception:
+            return "Internal Server Error", 500
+
+    with app.app_context():
+        try:
+            db.create_all()
+            robust_sqlite_migration(app)
+            db.create_all()
+            if not User.query.first():
+                u = User(username=os.getenv("ADMIN_USERNAME","admin"))
+                u.set_password(os.getenv("ADMIN_PASSWORD","admin123"))
+                db.session.add(u); db.session.commit()
+            from sqlalchemy import text
+            try:
+                count = db.session.execute(text("SELECT COUNT(1) FROM product")).scalar_one()
+            except Exception:
+                count = 0
+            if count == 0:
+                for i in range(12):
+                    name=f"Demo Product {i+1}"; slug=f"demo-product-{i+1}"
+                    price=round(random.uniform(10,200),2)
+                    cost=round(price*random.uniform(0.5,0.9),2)
+                    p=Product(sku="SKU-"+''.join(random.choices(string.digits,k=6)), slug=slug, name=name,
+                              price=price, cost=cost, currency="USD",
+                              description="<p>Great demo item.</p>",
+                              image_url=f"https://picsum.photos/seed/{i+10}/600/600")
+                    db.session.add(p)
+                db.session.commit()
+        except Exception as boot_err:
+            # surface boot errors in logs and set KV for admin to view
+            app.logger.exception("Boot error: %s", boot_err)
+            try:
+                KVStore.set("last_boot_error", str(boot_err))
+            except Exception:
+                pass
 
     app.register_blueprint(shop_bp)
     app.register_blueprint(admin_bp, url_prefix="/admin")

@@ -15,3 +15,9 @@
 ## v1.4.6
 - Define `/healthz` and `/health` inside `create_app()` to avoid NameError during import.
 - Build badge v1.4.6.
+
+## v1.4.7
+- Add global error handler (logs to EventLog) and 500.html page.
+- Diagnostics: `/_diag/env`, `/_diag/db`.
+- SQLite WAL mode + safer startup; engine pool pre-ping.
+- Build badge v1.4.7.
