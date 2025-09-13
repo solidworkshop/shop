@@ -1,14 +1,8 @@
+
 services:
-- type: web
-  name: shop-capi-pixel
-  env: python
-  plan: free
-  buildCommand: pip install -r requirements.txt
-  startCommand: gunicorn -k gthread -w 1 -b 0.0.0.0:$PORT app:app
-  envVars:
-  - key: PYTHON_VERSION
-    value: 3.11.9
-  - key: WEB_CONCURRENCY
-    value: 1
-  - key: FLASK_ENV
-    value: production
+  - type: web
+    name: shop-capi-pixel
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -k gthread -w 1 -b 0.0.0.0:$PORT app:app
+    healthCheckPath: /healthz

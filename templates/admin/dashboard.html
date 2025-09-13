@@ -1,171 +1,47 @@
-{% set c = counters %}
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Admin Console</title>
-  <meta name="robots" content="noindex,nofollow">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
-</head>
-<body class="bg-light">
-<div class="container py-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <div class="d-flex align-items-center gap-2">
-      <a href="/" class="btn btn-outline-secondary btn-sm">← Back to store</a>
-      <h3 class="mb-0">Store Simulator — Admin</h3>
-    </div>
-    <div class="text-end">
-      <span class="badge text-bg-secondary me-2">Build {{ build }}</span>
-    </div>
-  </div>
 
-  {% if dash_error %}<div class="alert alert-warning">{{ dash_error }}</div>{% endif %}
+{% extends 'admin/layout.html' %}
+{% block body %}
+<div class="container py-4">
   <div class="row g-3">
     <div class="col-12">
-      <div class="card shadow-sm">
+      <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
-          <strong>Counters</strong>
-          <span id="autoStatus" class="badge text-bg-warning">Status: Checking…</span>
+          <strong>Automation</strong>
+          <span id="automation-status" class="badge text-bg-{{ 'success' if running else 'secondary' }}">{{ 'running' if running else 'stopped' }}</span>
         </div>
-        <div class="card-body">
-          <div class="row text-center">
-            <div class="col-4 col-md-2"><div class="display-6" id="countPixel">{{ c.pixel }}</div><div>Pixel</div></div>
-            <div class="col-4 col-md-2"><div class="display-6" id="countCapi">{{ c.capi }}</div><div>CAPI</div></div>
-            <div class="col-4 col-md-2"><div class="display-6" id="countDedup">{{ c.dedup }}</div><div>Deduped</div></div>
-            <div class="col-6 col-md-3 mt-3 mt-md-0"><div class="display-6" id="countMarginEvents">0</div><div>Margin Events</div></div>
-            <div class="col-6 col-md-3 mt-3 mt-md-0"><div class="display-6" id="countPLTVEvents">0</div><div>PLTV Events</div></div>
-          </div>
+        <div class="card-body d-flex gap-2">
+          <button class="btn btn-success btn-sm" onclick="startIntervals()">Start</button>
+          <button class="btn btn-outline-secondary btn-sm" onclick="stopIntervals()">Stop</button>
+          <a class="btn btn-link btn-sm" href="/admin/ping" target="_blank">Ping</a>
         </div>
       </div>
     </div>
-
-    <div class="col-12">
-      <div class="card shadow-sm">
-        <div class="card-header"><strong>Automation</strong></div>
-        <div class="card-body">
-          <div class="alert alert-info py-2 px-3 small" id="autoMsg" style="display:none;"></div>
-          <div class="row g-2 align-items-end">
-            {% for name, v in intervals.items() %}
-            <div class="col-6 col-md-2">
-              <label class="form-label">{{ name }}</label>
-              <input type="number" step="0.1" min="0.5" class="form-control form-control-sm" id="interval_{{ name }}" value="{{ v }}">
-            </div>
-            {% endfor %}
-          </div>
-          <div class="mt-3 d-flex flex-wrap gap-3 align-items-center">
-            <div class="form-check form-switch">
-              <input class="form-check-input" type="checkbox" id="autoPixel" {{ 'checked' if auto_pixel else '' }}>
-              <label class="form-check-label" for="autoPixel">Send Pixel</label>
-            </div>
-            <div class="form-check form-switch">
-              <input class="form-check-input" type="checkbox" id="autoCapi" {{ 'checked' if auto_capi else '' }}>
-              <label class="form-check-label" for="autoCapi">Send CAPI</label>
-            </div>
-            <div class="form-check form-switch">
-              <input class="form-check-input" type="checkbox" id="useTestCode" {{ 'checked' if use_test_code else '' }}>
-              <label class="form-check-label" for="useTestCode">Use Test Event Code</label>
-            </div>
-          </div>
-          <div class="mt-3 row g-2">
-            <div class="col-6 col-md-3">
-              <label class="form-label">% of Purchases with Profit Margin</label>
-              <input type="number" class="form-control form-control-sm" id="pct_profit_margin" min="0" max="100" value="{{ pct_profit_margin }}">
-            </div>
-            <div class="col-6 col-md-3">
-              <label class="form-label">% of Purchases with PLTV</label>
-              <input type="number" class="form-control form-control-sm" id="pct_pltv" min="0" max="100" value="{{ pct_pltv }}">
-            </div>
-          </div>
-          <div class="mt-3">
-            <button id="startAuto" class="btn btn-success btn-sm">Start with Intervals</button>
-            <button id="stopAuto" class="btn btn-outline-danger btn-sm">Stop All</button>
-            <button id="pingAuto" class="btn btn-outline-secondary btn-sm">One Purchase Tick</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="col-12">
-      <div class="card shadow-sm">
-        <div class="card-header"><strong>Manual Send (raw JSON)</strong></div>
-        <div class="card-body">
-          <textarea id="manualJson" class="form-control" rows="6" placeholder='{"event_name":"Purchase","event_id":"abc123","currency":"USD","value":123.45,"profit_margin":12.34,"pltv":250}'></textarea>
-          <div class="mt-2 d-flex flex-wrap gap-2">
-            <button id="btnValidate" class="btn btn-outline-secondary btn-sm">Validate</button>
-            <button id="btnSend" class="btn btn-primary btn-sm">Send (Test Code respected)</button>
-            <button id="btnSendLive" class="btn btn-outline-primary btn-sm">Send Live Purchase Now</button>
-          </div>
-          <pre id="manualResult" class="mt-2 small text-muted" style="white-space:pre-wrap">—</pre>
-        </div>
-      </div>
-    </div>
-
-    <div class="col-12">
-      <div class="card shadow-sm">
-        <div class="card-header"><strong>Chaos</strong></div>
-        <div class="card-body d-flex flex-wrap gap-4">
-          <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" id="chaos_drop" {{ 'checked' if chaos.drop else '' }}>
-            <label class="form-check-label" for="chaos_drop">Drop events</label>
-          </div>
-          <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" id="chaos_omit" {{ 'checked' if chaos.omit else '' }}>
-            <label class="form-check-label" for="chaos_omit">Omit params</label>
-          </div>
-          <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" id="chaos_malformed" {{ 'checked' if chaos.malformed else '' }}>
-            <label class="form-check-label" for="chaos_malformed">Malformed payloads</label>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="col-12">
-      <div class="card shadow-sm">
-        <div class="card-header"><strong>Health & Pixel Check</strong></div>
-        <div class="card-body">
-          <button id="pixelCheckBtn" class="btn btn-primary btn-sm">Run Pixel Check</button>
-          <div id="pixelCheckResult" class="mt-2 small text-muted">—</div>
-          <div class="mt-2">
-            <button id="btnHealth" class="btn btn-outline-secondary btn-sm">Show Config Summary</button>
-            <pre id="healthOut" class="mt-2 small text-muted" style="white-space:pre-wrap">—</pre>
-          </div>
-          <div class="mt-3">
-            <a href="/admin/request-inspector" class="link-primary">Open Inspector</a>
-            <a href="/admin/logs" class="link-secondary ms-3">View Logs</a>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="col-12">
-      <div class="card shadow-sm">
-        <div class="card-header"><strong>Recent Events</strong></div>
-        <div class="card-body p-0">
-          <div class="table-responsive">
-            <table class="table table-sm table-striped mb-0">
-              <thead class="table-light">
-                <tr><th>Time (UTC)</th><th>Channel</th><th>Event</th><th>Status</th><th>Latency</th></tr>
-              </thead>
-              <tbody id="recentTable">
-                {% for r in recent %}
-                <tr>
-                  <td>{{ r.ts.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-                  <td>{{ r.channel }}</td>
-                  <td>{{ r.event_name }}</td>
-                  <td>{{ r.status }}</td>
-                  <td>{{ r.latency_ms }}ms</td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-
   </div>
 </div>
-<script src="{{ url_for('static', filename='js/admin-live.js') }}"></script>
-</body>
-</html>
+<script>
+async function apiPost(url, body=null){
+  const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: body?JSON.stringify(body):null});
+  const txt = await res.text();
+  try { return {ok: res.ok, status: res.status, json: JSON.parse(txt)}; } catch { return {ok: res.ok, status: res.status, text: txt}; }
+}
+async function startIntervals(){
+  const r = await apiPost('/admin/automation/start');
+  const el = document.getElementById('automation-status');
+  if(el){ el.className = 'badge text-bg-' + ((r.ok && r.json && r.json.ok)?'success':'danger'); el.textContent = (r.ok && r.json && r.json.ok)?'running':'error'; }
+}
+async function stopIntervals(){
+  const r = await apiPost('/admin/automation/stop');
+  const el = document.getElementById('automation-status');
+  if(el){ el.className = 'badge text-bg-' + ((r.ok && r.json && r.json.ok)?'secondary':'danger'); el.textContent = (r.ok && r.json && r.json.ok)?'stopped':'error'; }
+}
+async function pollAutomation(){
+  try{
+    const res = await fetch('/admin/automation/status');
+    const data = await res.json();
+    const el = document.getElementById('automation-status');
+    if(el){ el.className = 'badge text-bg-' + (data.running?'success':'secondary'); el.textContent = data.running?'running':'stopped'; }
+  }catch(e){}
+}
+setInterval(pollAutomation, 3000);
+</script>
+{% endblock %}
