@@ -74,6 +74,10 @@
               <input class="form-check-input" type="checkbox" id="autoCapi" {{ 'checked' if auto_capi else '' }}>
               <label class="form-check-label" for="autoCapi">Send CAPI</label>
             </div>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="useTestCode" {{ 'checked' if use_test_code else '' }}>
+              <label class="form-check-label" for="useTestCode">Use Test Event Code</label>
+            </div>
           </div>
           <div class="mt-3 row g-2">
             <div class="col-6">
@@ -101,7 +105,8 @@
           <textarea id="manualJson" class="form-control" rows="6" placeholder='{"event_name":"Purchase","event_id":"abc123","currency":"USD","value":123.45,"profit_margin":12.34,"pltv":250}'></textarea>
           <div class="mt-2 d-flex gap-2">
             <button id="btnValidate" class="btn btn-outline-secondary btn-sm">Validate</button>
-            <button id="btnSend" class="btn btn-primary btn-sm">Send</button>
+            <button id="btnSend" class="btn btn-primary btn-sm">Send (Test Code setting respected)</button>
+            <button id="btnSendLive" class="btn btn-outline-primary btn-sm">Send Live Purchase Now</button>
           </div>
           <pre id="manualResult" class="mt-2 small text-muted" style="white-space:pre-wrap">—</pre>
         </div>
@@ -136,6 +141,10 @@
         <div class="card-body">
           <button id="pixelCheckBtn" class="btn btn-primary btn-sm">Run Pixel Check</button>
           <div id="pixelCheckResult" class="mt-2 small text-muted">—</div>
+          <div class="mt-2">
+            <button id="btnHealth" class="btn btn-outline-secondary btn-sm">Show Config Summary</button>
+            <pre id="healthOut" class="mt-2 small text-muted" style="white-space:pre-wrap">—</pre>
+          </div>
           <div class="mt-3">
             <a href="/admin/request-inspector" class="link-primary">Open Inspector</a>
           </div>

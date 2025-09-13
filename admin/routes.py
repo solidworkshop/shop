@@ -1,8 +1,8 @@
-import json, uuid, time, traceback, requests, random, threading, ipaddress
+import json, uuid, time, traceback, requests, random, threading, ipaddress, sqlite3
 from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from flask_login import login_user, logout_user, login_required
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, text
 
 from config import Config
 from extensions import db
@@ -19,12 +19,12 @@ def _as_dict(x):
 def _sg(d, key, default=None):
     return d.get(key, default) if isinstance(d, dict) else default
 
-# Pixel/CAPI always available; automation can target channels via toggles
 def pixel_enabled(): return True
 def capi_enabled(): return True
 
 def get_auto_pixel(): return (KVStore.get("automation_pixel","1") == "1")
 def get_auto_capi():  return (KVStore.get("automation_capi","1") == "1")
+def use_test_code():  return (KVStore.get("use_test_event_code","1") == "1")
 
 EVENT_NAMES = ["PageView","ViewContent","AddToCart","InitiateCheckout","AddPaymentInfo","Purchase","Contact","Search","CompleteRegistration"]
 
@@ -43,9 +43,26 @@ def pct_pltv():   return int(KVStore.get("pct_pltv","100"))
 
 # Catalog settings
 def catalog_item_count(): return int(KVStore.get("catalog_item_count","12"))
-def catalog_currency_mode(): return KVStore.get("catalog_currency_mode","auto")  # auto|null|specific
+def catalog_currency_mode(): return KVStore.get("catalog_currency_mode","auto")
 def catalog_currency_specific(): return KVStore.get("catalog_currency_specific","USD")
 def catalog_locale(): return KVStore.get("catalog_locale","en-US")
+
+# -------------------- DB helpers: ensure Product has cost, description --------------------
+def ensure_product_columns():
+    try:
+        engine = db.engine
+        with engine.connect() as conn:
+            # detect columns
+            res = conn.execute(text("PRAGMA table_info(product)"))
+            cols = [r[1] for r in res.fetchall()]
+            if "cost" not in cols:
+                try: conn.execute(text("ALTER TABLE product ADD COLUMN cost REAL"))
+                except Exception: pass
+            if "description" not in cols:
+                try: conn.execute(text("ALTER TABLE product ADD COLUMN description TEXT"))
+                except Exception: pass
+    except Exception:
+        pass
 
 # -------------------- Rate Limiting --------------------
 class TokenBucket:
@@ -141,7 +158,7 @@ def _ensure_synthetic_fbp():
         KVStore.set(fbpk, fbp)
     return fbp
 
-def send_capi(event):
+def send_capi(event, force_live=False):
     event = _as_dict(event)
     if not capi_enabled() or chaos_drop(): return ("dropped", 0, None)
     start = time.time(); status, err = "ok", None
@@ -177,7 +194,9 @@ def send_capi(event):
         "custom_data": custom
     }]}
     test_code = getattr(Config,"TEST_EVENT_CODE","")
-    if test_code: data["test_event_code"]=test_code
+    # Only include test_event_code if enabled and not force_live
+    if test_code and use_test_code() and not force_live:
+        data["test_event_code"]=test_code
     try:
         while not capi_bucket.take(): time.sleep(0.02)
         if getattr(Config,"PIXEL_ID","") and getattr(Config,"ACCESS_TOKEN",""):
@@ -210,10 +229,10 @@ def send_capi(event):
 @admin_bp.route("/")
 @login_required
 def dashboard():
-    # Force-update build number so badge always matches this bundle
-    KVStore.set("build_number","v1.3.0")
+    ensure_product_columns()
+    KVStore.set("build_number","v1.3.1")
     c = Counters.get_or_create()
-    build = KVStore.get("build_number","v1.3.0")
+    build = KVStore.get("build_number","v1.3.1")
     recent = EventLog.query.order_by(desc(EventLog.ts)).limit(20).all()
     default_intervals = {"PageView":1.5,"ViewContent":2.0,"AddToCart":3.5,"InitiateCheckout":4.0,"AddPaymentInfo":5.0,"Purchase":6.0}
     user_intervals = {n: float(KVStore.get(f"interval_{n}", d)) for n,d in default_intervals.items()}
@@ -223,7 +242,7 @@ def dashboard():
     return render_template("admin/dashboard.html",
         counters=c, build=build, recent=recent, events=EVENT_NAMES,
         intervals=user_intervals, chaos=chaos, auto_pixel=auto_pixel, auto_capi=auto_capi,
-        pct_profit_margin=pct_margin(), pct_pltv=pct_pltv())
+        pct_profit_margin=pct_margin(), pct_pltv=pct_pltv(), use_test_code=use_test_code())
 
 # -------------------- Settings APIs --------------------
 @admin_bp.route("/api/settings", methods=["GET","POST"])
@@ -233,6 +252,7 @@ def api_settings():
         data = request.get_json(silent=True) or {}
         if "automation_pixel" in data: KVStore.set("automation_pixel", "1" if data["automation_pixel"] else "0")
         if "automation_capi" in data:  KVStore.set("automation_capi", "1" if data["automation_capi"] else "0")
+        if "use_test_event_code" in data: KVStore.set("use_test_event_code", "1" if data["use_test_event_code"] else "0")
         if "pct_profit_margin" in data:
             try: KVStore.set("pct_profit_margin", str(max(0,min(100,int(data["pct_profit_margin"])))))
             except Exception: pass
@@ -245,13 +265,13 @@ def api_settings():
                 try: KVStore.set(k, str(float(data[k])))
                 except Exception: pass
         return {"ok":True}
-    # GET
     return {
         "chaos_drop": chaos_drop(),
         "chaos_omit": chaos_omit(),
         "chaos_malformed": chaos_malformed(),
         "automation_pixel": get_auto_pixel(),
         "automation_capi": get_auto_capi(),
+        "use_test_event_code": use_test_code(),
         "pct_profit_margin": pct_margin(),
         "pct_pltv": pct_pltv(),
         **{ f"interval_{n}": float(KVStore.get(f"interval_{n}", d))
@@ -287,8 +307,10 @@ def manual_send():
             payload.pop("currency", None)
         if chaos_malformed():
             payload["value"] = "NaN"
+        # allow ?live=1 to bypass test_event_code for this call
+        force_live = (request.args.get("live") == "1")
         p_status = send_pixel(payload)
-        c_status = send_capi(payload)
+        c_status = send_capi(payload, force_live=force_live)
         return jsonify({"ok": True, "pixel": p_status[0], "capi": c_status[0]})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
@@ -297,15 +319,32 @@ def manual_send():
 AUTOMATION_THREADS = {}
 AUTOMATION_STOP = threading.Event()
 
+def pick_catalog_price_and_cost():
+    try:
+        p = Product.query.order_by(func.random()).first()
+        if p:
+            price = float(getattr(p,"price",0) or 0)
+            cost  = float(getattr(p,"cost",0) or 0)
+            if price <= 0:
+                price = round(random.uniform(10,300),2)
+            if cost <= 0 or cost > price:
+                # if no cost, backfill a plausible one
+                cost = round(price * random.uniform(margin_min(), margin_max()), 2)
+            return price, cost
+    except Exception:
+        pass
+    # fallback
+    price = round(random.uniform(10,300),2)
+    cost  = round(price * random.uniform(margin_min(), margin_max()), 2)
+    return price, cost
+
 def automation_worker(app, event_name, interval_s):
     with app.app_context():
         while not AUTOMATION_STOP.is_set():
             value = 0.0; currency="USD"
             event_payload = {"event_name": event_name, "event_id": str(uuid.uuid4()), "currency": currency}
             if event_name == "Purchase":
-                price = random.uniform(10,300)
-                cmin,cmax = margin_min(), margin_max()
-                cost = price * random.uniform(cmin,cmax)
+                price, cost = pick_catalog_price_and_cost()
                 margin = max(0, price - cost)
                 value = price
                 event_payload["value"] = value
@@ -372,12 +411,15 @@ def api_automation_status():
     running = bool(AUTOMATION_THREADS) and not AUTOMATION_STOP.is_set()
     return {"ok": True, "running": running, "threads": list(AUTOMATION_THREADS.keys()),
             "automation_pixel": get_auto_pixel(), "automation_capi": get_auto_capi(),
+            "use_test_event_code": use_test_code(),
             "pct_profit_margin": pct_margin(), "pct_pltv": pct_pltv()}
 
 # -------------------- Catalog Management --------------------
 def product_to_dict(p):
     return {
-        "id": p.id, "sku": p.sku, "name": p.name, "price": float(getattr(p,"price",0) or 0),
+        "id": p.id, "sku": p.sku, "name": p.name,
+        "price": float(getattr(p,"price",0) or 0),
+        "cost": float(getattr(p,"cost",0) or 0),
         "currency": getattr(p,"currency","USD"),
         "description": getattr(p,"description",""),
         "image_url": getattr(p,"image_url","")
@@ -386,6 +428,7 @@ def product_to_dict(p):
 @admin_bp.route("/catalog")
 @login_required
 def catalog_page():
+    ensure_product_columns()
     products = Product.query.order_by(Product.id.asc()).all()
     return render_template("admin/catalog.html",
         products=products,
@@ -400,6 +443,7 @@ def catalog_page():
 @admin_bp.route("/api/catalog", methods=["GET","POST"])
 @login_required
 def api_catalog():
+    ensure_product_columns()
     if request.method == "GET":
         products = Product.query.order_by(Product.id.asc()).all()
         return jsonify({"ok":True, "products":[product_to_dict(p) for p in products]})
@@ -417,7 +461,11 @@ def api_catalog():
         p.price = float(data.get("price", getattr(p,"price",0) or 0))
     except Exception:
         p.price = 0.0
-    p.currency = data.get("currency") or getattr(p,"currency", catalog_currency_specific() if catalog_currency_mode()=="specific" else "USD")
+    try:
+        p.cost = float(data.get("cost", getattr(p,"cost",0) or 0))
+    except Exception:
+        p.cost = 0.0
+    p.currency = data.get("currency") or getattr(p,"currency", "USD")
     p.description = data.get("description") or getattr(p,"description","")
     p.image_url = data.get("image_url") or getattr(p,"image_url","")
     db.session.commit()
@@ -426,6 +474,7 @@ def api_catalog():
 @admin_bp.route("/api/catalog/<int:pid>", methods=["DELETE"])
 @login_required
 def api_catalog_delete(pid):
+    ensure_product_columns()
     p = Product.query.get(pid)
     if not p: return {"ok":False,"error":"not found"},404
     db.session.delete(p); db.session.commit()
@@ -434,17 +483,21 @@ def api_catalog_delete(pid):
 @admin_bp.route("/api/catalog/seed", methods=["POST"])
 @login_required
 def api_catalog_seed():
+    ensure_product_columns()
     data = request.get_json(silent=True) or {}
     count = int(data.get("count", catalog_item_count()))
     mode = catalog_currency_mode()
     cur = catalog_currency_specific()
     for i in range(count):
+        price = round(random.uniform(5,250), 2)
+        cost  = round(price * random.uniform(margin_min(), margin_max()), 2)
         p = Product(
             sku=f"SKU-{random.randint(10000,99999)}",
             name=f"Demo Item {random.randint(100,999)}",
-            price=round(random.uniform(5,250), 2),
+            price=price,
+            cost=cost,
             currency=(None if mode=="null" else (cur if mode=="specific" else "USD")),
-            description="Demo product for Pixel/CAPI testing.",
+            description="<p>Demo product for Pixel/CAPI testing.</p>",
             image_url="https://picsum.photos/seed/"+str(random.randint(1,9999))+"/400/400"
         )
         db.session.add(p)
@@ -473,7 +526,7 @@ def api_catalog_settings():
             "currency_specific": catalog_currency_specific(),
             "locale": catalog_locale()}
 
-# -------------------- Inspector & Pixel Check --------------------
+# -------------------- Inspector & Health --------------------
 @admin_bp.route("/request-inspector")
 @login_required
 def request_inspector():
@@ -509,3 +562,18 @@ def pixel_check():
         except Exception as e:
             last_err = str(e)[:200]; continue
     return {"ok":False,"error": last_err or "unable to fetch any candidate URL"}
+
+@admin_bp.route("/api/health")
+@login_required
+def api_health():
+    px = getattr(Config,'PIXEL_ID','')
+    at = getattr(Config,'ACCESS_TOKEN','')
+    gv = getattr(Config,'GRAPH_VER','')
+    bu = getattr(Config,'BASE_URL','')
+    return jsonify({
+        "ok": True,
+        "pixel_id_present": bool(px),
+        "access_token_present": bool(at),
+        "graph_version": gv,
+        "base_url": bu
+    })

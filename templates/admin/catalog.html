@@ -59,7 +59,7 @@
         <table class="table table-sm table-striped mb-0" id="prodTable">
           <thead class="table-light">
             <tr>
-              <th>ID</th><th>SKU</th><th>Name</th><th>Price</th><th>Currency</th><th>Preview</th><th>Image URL</th><th></th>
+              <th>ID</th><th>SKU</th><th>Name</th><th>Price</th><th>Cost</th><th>Currency</th><th>Preview</th><th>Image URL</th><th>Description (HTML)</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -69,9 +69,11 @@
               <td contenteditable="true">{{ p.sku }}</td>
               <td contenteditable="true">{{ p.name }}</td>
               <td contenteditable="true">{{ "%.2f"|format(p.price or 0) }}</td>
+              <td contenteditable="true">{{ "%.2f"|format(p.cost or 0) }}</td>
               <td contenteditable="true">{{ p.currency or '' }}</td>
               <td class="text-muted small preview"></td>
               <td contenteditable="true">{{ p.image_url or '' }}</td>
+              <td contenteditable="true">{{ p.description or '' }}</td>
               <td class="text-end">
                 <button class="btn btn-primary btn-sm saveRow">Save</button>
                 <button class="btn btn-outline-danger btn-sm delRow">Delete</button>

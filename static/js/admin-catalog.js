@@ -9,9 +9,10 @@
       sku: tds[1].textContent.trim(),
       name: tds[2].textContent.trim(),
       price: parseFloat(tds[3].textContent.trim() || '0') || 0,
-      currency: tds[4].textContent.trim() || null,
-      image_url: tds[6].textContent.trim(),
-      description: '' // optional field not shown inline
+      cost: parseFloat(tds[4].textContent.trim() || '0') || 0,
+      currency: tds[5].textContent.trim() || null,
+      image_url: tds[7].textContent.trim(),
+      description: tds[8].textContent // may contain HTML
     };
   }
 
@@ -20,7 +21,6 @@
     try{
       return new Intl.NumberFormat(loc, { style:'currency', currency: currency || 'USD' }).format(price || 0);
     }catch(e){
-      // Fallback
       return (currency||'USD') + ' ' + (price||0).toFixed(2);
     }
   }
@@ -32,7 +32,6 @@
     });
   }
 
-  // Save settings
   $('#saveSettings')?.addEventListener('click', async ()=>{
     const payload = {
       item_count: parseInt($('#itemCount').value||'1',10),
@@ -44,14 +43,12 @@
     refreshPreviews();
   });
 
-  // Seed items
   $('#seedBtn')?.addEventListener('click', async ()=>{
     const count = parseInt($('#itemCount').value||'1',10);
     await fetch('/admin/api/catalog/seed', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({count})});
     location.reload();
   });
 
-  // Add row
   $('#addRow')?.addEventListener('click', ()=>{
     const tbody = $('#prodTable tbody');
     const tr = document.createElement('tr');
@@ -60,9 +57,11 @@
       <td contenteditable="true">SKU-${Math.floor(Math.random()*90000+10000)}</td>
       <td contenteditable="true">New Product</td>
       <td contenteditable="true">19.99</td>
+      <td contenteditable="true">9.99</td>
       <td contenteditable="true"></td>
       <td class="text-muted small preview"></td>
       <td contenteditable="true"></td>
+      <td contenteditable="true"><p>Short description</p></td>
       <td class="text-end">
         <button class="btn btn-primary btn-sm saveRow">Save</button>
         <button class="btn btn-outline-danger btn-sm delRow">Delete</button>
@@ -72,7 +71,6 @@
     refreshPreviews();
   });
 
-  // Save row
   document.addEventListener('click', async (e)=>{
     if (e.target.classList.contains('saveRow')){
       const tr = e.target.closest('tr');
@@ -96,13 +94,11 @@
     }
   });
 
-  // Live preview on edits
   document.addEventListener('input', (e)=>{
     if (e.target.closest('#prodTable')){
       refreshPreviews();
     }
   });
 
-  // Initial preview
   refreshPreviews();
 })();
