@@ -125,6 +125,16 @@ def create_app():
     app.register_blueprint(admin_bp, url_prefix="/admin")
     return app
 
+
+@app.route("/healthz", methods=["GET", "HEAD"])
+def healthz():
+    return "ok", 200
+
+@app.route("/health", methods=["GET", "HEAD"])
+def health():
+    return "ok", 200
+
+
 app = create_app()
 
 if __name__ == "__main__":
