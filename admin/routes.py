@@ -1,6 +1,6 @@
 import json, uuid, time, traceback, requests, random, threading, ipaddress
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from flask_login import login_user, logout_user, login_required
 from sqlalchemy import desc
 
@@ -149,7 +149,7 @@ def _clean_ip(raw):
     if not raw:
         return None
     ip = raw.split(",")[0].strip()  # take first from XFF chain
-    # Strip :port for IPv4 "x.x.x.x:port"; preserve IPv6 format (may contain colons)
+    # Strip :port for IPv4 "x.x.x.x:port"; preserve IPv6 format
     if "." in ip and ip.count(":") == 1:
         ip = ip.split(":")[0]
     try:
@@ -387,31 +387,33 @@ def manual_send():
 AUTOMATION_THREADS = {}
 AUTOMATION_STOP = threading.Event()
 
-def automation_worker(event_name, interval_s):
-    while not AUTOMATION_STOP.is_set():
-        if not _get_bool(f"ev_{event_name}", True):
+def automation_worker(app, event_name, interval_s):
+    # Ensure a Flask app context so DB and config work in threads
+    with app.app_context():
+        while not AUTOMATION_STOP.is_set():
+            if not _get_bool(f"ev_{event_name}", True):
+                time.sleep(max(0.25, float(interval_s)))
+                continue
+            value = 0.0
+            currency = "USD"
+            if event_name == "Purchase":
+                price = random.uniform(10, 300)
+                cmin, cmax = margin_min(), margin_max()
+                cost = price * random.uniform(cmin, cmax)
+                margin = max(0, price - cost)
+                value = price
+                c = Counters.get_or_create()
+                c.margin_sum += margin
+                if pltv_randomized():
+                    c.pltv_sum += random.uniform(pltv_min(), pltv_max())
+                db.session.commit()
+            ev = make_event(event_name, value=value, currency=currency)
+            try:
+                send_pixel(ev)
+                send_capi(ev)
+            except Exception:
+                pass
             time.sleep(max(0.25, float(interval_s)))
-            continue
-        value = 0.0
-        currency = "USD"
-        if event_name == "Purchase":
-            price = random.uniform(10, 300)
-            cmin, cmax = margin_min(), margin_max()
-            cost = price * random.uniform(cmin, cmax)
-            margin = max(0, price - cost)
-            value = price
-            c = Counters.get_or_create()
-            c.margin_sum += margin
-            if pltv_randomized():
-                c.pltv_sum += random.uniform(pltv_min(), pltv_max())
-            db.session.commit()
-        ev = make_event(event_name, value=value, currency=currency)
-        try:
-            send_pixel(ev)
-            send_capi(ev)
-        except Exception:
-            pass
-        time.sleep(max(0.25, float(interval_s)))
 
 @admin_bp.route("/api/automation", methods=["POST"])
 @login_required
@@ -424,18 +426,19 @@ def api_automation():
         AUTOMATION_STOP.clear()
         # intervals from request or KV
         intervals = data.get("intervals", {})
+        app = current_app._get_current_object()
         for name in ("PageView","ViewContent","AddToCart","InitiateCheckout","AddPaymentInfo","Purchase"):
             key = f"interval_{name}"
             default = {"PageView":1.5,"ViewContent":2.0,"AddToCart":3.5,"InitiateCheckout":4.0,"AddPaymentInfo":5.0,"Purchase":6.0}.get(name, 8.0)
             interval = float(intervals.get(key, KVStore.get(key, default)))
-            t = threading.Thread(target=automation_worker, args=(name, interval), daemon=True)
+            t = threading.Thread(target=automation_worker, args=(app, name, interval), daemon=True)
             t.start()
             AUTOMATION_THREADS[name] = t
         return {"ok": True, "started": list(AUTOMATION_THREADS.keys())}
     elif cmd == "stop":
         AUTOMATION_STOP.set()
         for k,t in list(AUTOMATION_THREADS.items()):
-            t.join(timeout=0.1)
+            t.join(timeout=0.2)
         AUTOMATION_THREADS.clear()
         return {"ok": True, "stopped": True}
     return {"ok": False, "error":"unknown cmd"}, 400
