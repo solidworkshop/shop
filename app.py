@@ -41,15 +41,12 @@ def robust_sqlite_migration(app):
                     if any(col not in pcols for col in required):
                         need_rebuild = True
                 else:
-                    # table missing entirely; db.create_all() will make it — no rebuild needed
                     need_rebuild = False
             except Exception:
-                # if PRAGMA fails, let create_all handle initial creation
                 need_rebuild = False
 
         if need_rebuild:
             with db.engine.begin() as conn:
-                # rename old, create new, copy rows, drop old — all in one transactional context
                 conn.exec_driver_sql("ALTER TABLE product RENAME TO product_old")
                 conn.exec_driver_sql("""                    CREATE TABLE product (
                         id INTEGER PRIMARY KEY,
@@ -91,19 +88,23 @@ def create_app():
         from models import User
         return db.session.get(User, int(uid))
 
+    # Health endpoints must be defined on the actual app instance
+    @app.route("/healthz", methods=["GET", "HEAD"])
+    def healthz():
+        return "ok", 200
+
+    @app.route("/health", methods=["GET", "HEAD"])
+    def health():
+        return "ok", 200
+
     with app.app_context():
-        # Create base tables, run robust migration, create again to be safe
         db.create_all()
         robust_sqlite_migration(app)
         db.create_all()
-
-        # Seed admin
         if not User.query.first():
             u = User(username=os.getenv("ADMIN_USERNAME","admin"))
             u.set_password(os.getenv("ADMIN_PASSWORD","admin123"))
             db.session.add(u); db.session.commit()
-
-        # Seed products using raw SQL count to avoid ORM introspection during first boot
         from sqlalchemy import text
         try:
             count = db.session.execute(text("SELECT COUNT(1) FROM product")).scalar_one()
@@ -124,16 +125,6 @@ def create_app():
     app.register_blueprint(shop_bp)
     app.register_blueprint(admin_bp, url_prefix="/admin")
     return app
-
-
-@app.route("/healthz", methods=["GET", "HEAD"])
-def healthz():
-    return "ok", 200
-
-@app.route("/health", methods=["GET", "HEAD"])
-def health():
-    return "ok", 200
-
 
 app = create_app()
 

@@ -11,3 +11,7 @@
 ## v1.4.5
 - Add `/healthz` and `/health` endpoints that return HTTP 200 immediately (no DB).
 - Build badge v1.4.5.
+
+## v1.4.6
+- Define `/healthz` and `/health` inside `create_app()` to avoid NameError during import.
+- Build badge v1.4.6.
