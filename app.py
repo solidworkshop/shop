@@ -114,6 +114,14 @@ def create_app():
     def health():
         return "ok", 200
 
+    @app.route('/_diag/boot')
+    def diag_boot():
+        try:
+            from models import KVStore
+            return {'ok': True, 'last_boot_error': KVStore.get('last_boot_error')}
+        except Exception as e:
+            return {'ok': False, 'error': str(e)}, 500
+
     # Diagnostics endpoints (no auth, lightweight)
     @app.route("/_diag/env")
     def diag_env():
@@ -130,6 +138,19 @@ def create_app():
             return jsonify({"ok": False, "error": str(e)}), 500
 
     # Global error handler
+    @app.errorhandler(Exception)
+    def on_any_exception(e):
+        import traceback
+        tb = ''.join(traceback.format_exception(None, e, e.__traceback__))
+        try:
+            from models import EventLog
+            from extensions import db
+            ev = EventLog(channel='app', event_name='exception', status='500', latency_ms=0, payload='', error=tb[:4000])
+            db.session.add(ev); db.session.commit()
+        except Exception:
+            pass
+        return ('Internal Server Error', 500)
+
     @app.errorhandler(500)
     def on_500(e):
         # Log traceback and store a row so admin can see it

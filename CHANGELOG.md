@@ -21,3 +21,13 @@
 - Diagnostics: `/_diag/env`, `/_diag/db`.
 - SQLite WAL mode + safer startup; engine pool pre-ping.
 - Build badge v1.4.7.
+
+## v1.4.8
+- Bind Gunicorn to `$PORT` to satisfy Render routing (fixes 502 Bad Gateway).
+- Build badge v1.4.8.
+
+## v1.4.9
+- Add global catch-all exception handler that logs to EventLog.
+- Hardened shop routes to avoid 500s even if DB hiccups.
+- Diagnostics: `/_diag/boot` shows last boot error.
+- Build badge v1.4.9.

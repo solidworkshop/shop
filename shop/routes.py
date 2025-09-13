@@ -11,12 +11,20 @@ def cart_set(c): session["cart"] = c
 
 @shop_bp.route("/")
 def home():
-    products = Product.query.order_by(Product.id.asc()).all()
+    try:
+        products = Product.query.order_by(Product.id.asc()).all()
+    except Exception as e:
+        products = []
     return render_template("shop/home.html", products=products)
 
 @shop_bp.route("/product/<slug>")
 def product_detail(slug):
-    p = Product.query.filter_by(slug=slug).first_or_404()
+    try:
+        p = Product.query.filter_by(slug=slug).first()
+    except Exception:
+        p = None
+    if not p:
+        return render_template('shop/404.html'), 404
     return render_template("shop/product_detail.html", p=p)
 
 @shop_bp.route("/cart")
