@@ -8,6 +8,29 @@ from shop.routes import shop_bp
 import os, random, string
 from werkzeug.security import generate_password_hash
 
+from sqlalchemy.exc import OperationalError
+
+def _retry(fn, attempts=5, delay=0.1):
+    for i in range(attempts):
+        try:
+            return fn()
+        except OperationalError as e:
+            if "database is locked" in str(e):
+                time.sleep(delay*(i+1))
+                continue
+            raise
+    return fn()
+
+def _ensure_db_dir(uri):
+    # If sqlite path points to a file, ensure its directory exists
+    if uri.startswith("sqlite:////"):
+        path = uri.replace("sqlite:////","/")
+        import os
+        d = os.path.dirname(path)
+        if d and not os.path.exists(d):
+            os.makedirs(d, exist_ok=True)
+
+
 def robust_sqlite_migration(app):
     # Use engine.begin() to avoid nested transactions. No manual BEGIN/COMMIT.
     from sqlalchemy import event
@@ -35,6 +58,29 @@ def robust_sqlite_migration(app):
                 for uid, pwh in res:
                     if pwh is None or pwh == "":
                         from werkzeug.security import generate_password_hash
+
+from sqlalchemy.exc import OperationalError
+
+def _retry(fn, attempts=5, delay=0.1):
+    for i in range(attempts):
+        try:
+            return fn()
+        except OperationalError as e:
+            if "database is locked" in str(e):
+                time.sleep(delay*(i+1))
+                continue
+            raise
+    return fn()
+
+def _ensure_db_dir(uri):
+    # If sqlite path points to a file, ensure its directory exists
+    if uri.startswith("sqlite:////"):
+        path = uri.replace("sqlite:////","/")
+        import os
+        d = os.path.dirname(path)
+        if d and not os.path.exists(d):
+            os.makedirs(d, exist_ok=True)
+
                         hashed = generate_password_hash(os.getenv("ADMIN_PASSWORD","admin123"))
                         conn.exec_driver_sql("UPDATE user SET pw_hash = :h WHERE id = :i", {"h": hashed, "i": uid})
             except Exception:
@@ -90,6 +136,11 @@ def robust_sqlite_migration(app):
 def create_app():
     app = Flask(__name__, static_folder="static", template_folder="templates")
     app.config.from_object(Config)
+    # Ensure sqlite directory exists
+    try:
+        _ensure_db_dir(app.config['SQLALCHEMY_DATABASE_URI'])
+    except Exception:
+        pass
 
     # Basic logging to stdout so Render logs show traces
     handler = logging.StreamHandler(sys.stdout)
@@ -146,7 +197,7 @@ def create_app():
             from models import EventLog
             from extensions import db
             ev = EventLog(channel='app', event_name='exception', status='500', latency_ms=0, payload='', error=tb[:4000])
-            db.session.add(ev); db.session.commit()
+            db.session.add(ev); _retry(lambda: db.session.commit())
         except Exception:
             pass
         return ('Internal Server Error', 500)
@@ -157,7 +208,7 @@ def create_app():
         tb = ''.join(traceback.format_exception(None, e, e.__traceback__))
         try:
             ev = EventLog(channel="app", event_name="error", status="500", latency_ms=0, payload="", error=tb[:2000])
-            db.session.add(ev); db.session.commit()
+            db.session.add(ev); _retry(lambda: db.session.commit())
         except Exception:
             pass
         try:
@@ -167,13 +218,13 @@ def create_app():
 
     with app.app_context():
         try:
-            db.create_all()
+            _retry(lambda: db.create_all())
             robust_sqlite_migration(app)
-            db.create_all()
+            _retry(lambda: db.create_all())
             if not User.query.first():
                 u = User(username=os.getenv("ADMIN_USERNAME","admin"))
                 u.set_password(os.getenv("ADMIN_PASSWORD","admin123"))
-                db.session.add(u); db.session.commit()
+                db.session.add(u); _retry(lambda: db.session.commit())
             from sqlalchemy import text
             try:
                 count = db.session.execute(text("SELECT COUNT(1) FROM product")).scalar_one()
@@ -189,7 +240,7 @@ def create_app():
                               description="<p>Great demo item.</p>",
                               image_url=f"https://picsum.photos/seed/{i+10}/600/600")
                     db.session.add(p)
-                db.session.commit()
+                _retry(lambda: db.session.commit())
         except Exception as boot_err:
             # surface boot errors in logs and set KV for admin to view
             app.logger.exception("Boot error: %s", boot_err)

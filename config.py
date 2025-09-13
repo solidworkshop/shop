@@ -1,7 +1,7 @@
 import os
 class Config:
     SECRET_KEY = os.getenv("SECRET_KEY","dev-secret")
-    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL","sqlite:///app.db")
+    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL","sqlite:////var/tmp/app.db")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     PIXEL_ID = os.getenv("PIXEL_ID","")
     ACCESS_TOKEN = os.getenv("ACCESS_TOKEN","")

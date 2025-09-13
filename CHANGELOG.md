@@ -31,3 +31,9 @@
 - Hardened shop routes to avoid 500s even if DB hiccups.
 - Diagnostics: `/_diag/boot` shows last boot error.
 - Build badge v1.4.9.
+
+## v1.4.10
+- Default SQLite path moved to `/var/tmp/app.db` (writable on Render).
+- Added lock retry wrapper for create/commit operations.
+- New `/_diag/dburi` to see effective DB URI.
+- Build badge v1.4.10.

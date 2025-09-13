@@ -155,9 +155,9 @@ def send_capi(event, force_live=False):
 @admin_bp.route("/")
 @login_required
 def dashboard():
-    KVStore.set("build_number","v1.4.9")
+    KVStore.set("build_number","v1.4.10")
     c=Counters.get_or_create()
-    build=KVStore.get("build_number","v1.4.9")
+    build=KVStore.get("build_number","v1.4.10")
     recent=EventLog.query.order_by(desc(EventLog.ts)).limit(20).all()
     defaults={"PageView":1.5,"ViewContent":2.0,"AddToCart":3.5,"InitiateCheckout":4.0,"AddPaymentInfo":5.0,"Purchase":6.0}
     user_intervals={n: float(KVStore.get(f"interval_{n}", d)) for n,d in defaults.items()}
