@@ -1,76 +1,40 @@
-
 {% extends 'admin/layout.html' %}
 {% block body %}
 <div class="container py-4" style="max-width:900px">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; img-src 'self' data: blob: https://www.facebook.com; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://connect.facebook.net; connect-src 'self'; frame-ancestors 'self';">
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="mb-0">Pixel Beacons</h4>
     <span class="badge text-bg-secondary">Beacon</span>
   </div>
-
   <div class="card mb-3">
     <div class="card-header"><strong>Generator</strong></div>
     <div class="card-body">
       <div class="row g-2">
-        <div class="col-md-4">
-          <label class="form-label small">Pixel ID</label>
-          <input id="pb-pixel" class="form-control" value="{{ pixel_id or '' }}">
-        </div>
-        <div class="col-md-4">
-          <label class="form-label small">Event</label>
-          <select id="pb-event" class="form-select">
-            <option>PageView</option>
-            <option>ViewContent</option>
-            <option>AddToCart</option>
-            <option>InitiateCheckout</option>
-            <option>Purchase</option>
-          </select>
-        </div>
-        <div class="col-md-4">
-          <label class="form-label small">QPS (1-10)</label>
-          <input id="pb-qps" type="number" min="1" max="10" class="form-control" value="3">
-        </div>
-        <div class="col-md-4">
-          <label class="form-label small">Duration (sec)</label>
-          <input id="pb-dur" type="number" min="1" class="form-control" value="60">
-        </div>
-        <div class="col-md-4">
-          <label class="form-label small">Value (Purchase)</label>
-          <input id="pb-val" type="number" step="0.01" class="form-control" value="19.99">
-        </div>
-        <div class="col-md-4">
-          <label class="form-label small">Currency</label>
-          <input id="pb-cur" class="form-control" value="USD">
-        </div>
+        <div class="col-md-4"><label class="form-label small">Pixel ID</label><input id="pb-pixel" class="form-control" value="{{ pixel_id or '' }}"></div>
+        <div class="col-md-4"><label class="form-label small">Event</label><select id="pb-event" class="form-select"><option>PageView</option><option>ViewContent</option><option>AddToCart</option><option>InitiateCheckout</option><option>Purchase</option></select></div>
+        <div class="col-md-4"><label class="form-label small">QPS (1-10)</label><input id="pb-qps" type="number" min="1" max="10" class="form-control" value="3"></div>
+        <div class="col-md-4"><label class="form-label small">Duration (sec)</label><input id="pb-dur" type="number" min="1" class="form-control" value="60"></div>
+        <div class="col-md-4"><label class="form-label small">Value (Purchase)</label><input id="pb-val" type="number" step="0.01" class="form-control" value="19.99"></div>
+        <div class="col-md-4"><label class="form-label small">Currency</label><input id="pb-cur" class="form-control" value="USD"></div>
       </div>
-
       <div class="mt-3">
         <label class="form-label small me-2">Event ID</label>
-        <div class="form-check form-check-inline">
-          <input class="form-check-input" type="radio" name="pb-eid-mode" id="pb-eid-auto" value="auto" checked>
-          <label class="form-check-label" for="pb-eid-auto">auto (none)</label>
-        </div>
-        <div class="form-check form-check-inline">
-          <input class="form-check-input" type="radio" name="pb-eid-mode" id="pb-eid-uuid" value="uuid">
-          <label class="form-check-label" for="pb-eid-uuid">uuid</label>
-        </div>
-        <div class="form-check form-check-inline">
-          <input class="form-check-input" type="radio" name="pb-eid-mode" id="pb-eid-fixed" value="fixed">
-          <label class="form-check-label" for="pb-eid-fixed">fixed</label>
-        </div>
+        <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="pb-eid-mode" id="pb-eid-auto" value="auto" checked><label class="form-check-label" for="pb-eid-auto">auto (none)</label></div>
+        <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="pb-eid-mode" id="pb-eid-uuid" value="uuid"><label class="form-check-label" for="pb-eid-uuid">uuid</label></div>
+        <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="pb-eid-mode" id="pb-eid-fixed" value="fixed"><label class="form-check-label" for="pb-eid-fixed">fixed</label></div>
         <input id="pb-eid-fixed-val" class="form-control mt-1" placeholder="fixed event_id (optional)">
       </div>
-
-      <div class="mt-3 d-flex gap-2">
+      <div class="mt-3 d-flex gap-2 align-items-center">
         <button class="btn btn-success" onclick="PB.start()">Start</button>
         <button class="btn btn-outline-secondary" onclick="PB.stop()">Stop</button>
+        <button class="btn btn-link" onclick="PB.openTest()" type="button">Open Test URL</button>
         <span class="ms-3">Status: <span id="pb-status" class="badge text-bg-secondary">stopped</span></span>
       </div>
-
       <div class="mt-3 d-flex gap-4 flex-wrap">
         <div><div class="small text-muted">Sent</div><div class="fs-4" id="pb-sent">0</div></div>
         <div><div class="small text-muted">Errors</div><div class="fs-4" id="pb-err">0</div></div>
       </div>
-      <div class="form-text">Tip: disable ad blockers; requests go to <code>https://www.facebook.com/tr</code>.</div>
     </div>
   </div>
 </div>

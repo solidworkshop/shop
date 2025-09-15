@@ -55,3 +55,32 @@ app = create_app()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
+
+@app.after_request
+def add_csp(resp):
+    csp = "default-src 'self'; img-src 'self' data: blob: https://www.facebook.com; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://connect.facebook.net; connect-src 'self'; frame-ancestors 'self';"
+    try:
+        # If an existing CSP header exists, merge minimally for img-src
+        current = resp.headers.get('Content-Security-Policy')
+        if current and 'img-src' in current and 'facebook.com' not in current:
+            # naive merge: append facebook.com for images
+            parts = current.split(';')
+            parts = [p.strip() for p in parts if p.strip()]
+            merged = []
+            added_img = False
+            for p in parts:
+                if p.startswith('img-src'):
+                    if 'facebook.com' not in p:
+                        p = p + ' https://www.facebook.com'
+                    added_img = True
+                merged.append(p)
+            if not added_img:
+                merged.append("img-src 'self' data: blob: https://www.facebook.com")
+            resp.headers['Content-Security-Policy'] = '; '.join(merged)
+        else:
+            resp.headers['Content-Security-Policy'] = csp
+    except Exception:
+        resp.headers['Content-Security-Policy'] = csp
+    resp.headers['X-Robots-Tag'] = 'noindex, nofollow'
+    return resp
