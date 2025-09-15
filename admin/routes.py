@@ -22,9 +22,45 @@ def login():
         return render_template("admin/login.html", error="Invalid credentials", username=request.form.get("username","")), 401
     return render_template("admin/login.html")
 
+@admin_bp.route("/api/counters")
+@login_required
+def api_counters():
+    return jsonify(_compute_counters())
+
+
 @admin_bp.route("/logout")
 @login_required
 def logout(): logout_user(); return redirect(url_for("admin.login"))
+
+def _compute_counters():
+    # Counts
+    px = db.session.execute(
+        text("SELECT COUNT(*) FROM event_log WHERE source = 'pixel'")
+    ).scalar() or 0
+
+    cp = db.session.execute(
+        text("SELECT COUNT(*) FROM event_log WHERE source = 'capi'")
+    ).scalar() or 0
+
+    deduped = db.session.execute(
+        text("SELECT COUNT(*) FROM event_log WHERE deduped = 1")
+    ).scalar() or 0
+
+
+    with_pltv = db.session.execute(
+        text("SELECT COUNT(*) FROM event_log WHERE payload LIKE :q"),
+        {"q": '%"pltv"%'}
+    ).scalar() or 0
+
+    return {
+        "pixel": int(px),
+        "capi": int(cp),
+        "deduped": int(deduped),
+        "margin_events": int(with_margin),
+        "pltv_events": int(with_pltv),
+    }
+
+
 
 def counters_snapshot():
     px = EventLog.query.filter_by(channel="pixel", status="ok").count()
