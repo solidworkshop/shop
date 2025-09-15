@@ -1,34 +1,22 @@
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Request Inspector</title>
-  <meta name="robots" content="noindex,nofollow">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
-</head>
-<body class="bg-light">
-<div class="container py-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h4 class="mb-0">Request Inspector</h4>
-    <a href="/admin" class="btn btn-outline-secondary btn-sm">← Admin</a>
-  </div>
-  <div class="table-responsive">
-    <table class="table table-sm table-striped">
-      <thead class="table-light"><tr><th>Time</th><th>Channel</th><th>Event</th><th>Status</th><th>Latency</th><th>Error</th></tr></thead>
-      <tbody>
-        {% for r in logs %}
-        <tr>
-          <td>{{ r.ts.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-          <td>{{ r.channel }}</td>
-          <td>{{ r.event_name }}</td>
-          <td>{{ r.status }}</td>
-          <td>{{ r.latency_ms }}ms</td>
-          <td class="small text-muted">{{ r.error or '' }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+{% extends "base.html" %}
+{% block content %}
+<h1>Request Inspector</h1>
+<div class="table-responsive">
+  <table class="table table-sm">
+    <thead><tr><th>Time</th><th>Channel</th><th>Event</th><th>Status</th><th>Latency</th><th>Payload</th><th>Error</th></tr></thead>
+    <tbody>
+      {% for r in logs %}
+      <tr>
+        <td>{{ r.ts }}</td>
+        <td>{{ r.channel }}</td>
+        <td>{{ r.event_name }}</td>
+        <td>{{ r.status }}</td>
+        <td>{{ r.latency_ms }}ms</td>
+        <td><code class="small d-inline-block text-wrap" style="max-width:420px;">{{ r.payload }}</code></td>
+        <td class="small text-danger">{{ r.error }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </div>
-</body>
-</html>
+{% endblock %}

@@ -1,22 +1,25 @@
-{% extends 'shop/base.html' %}
+{% extends "base.html" %}
 {% block content %}
-<h3>Cart</h3>
+<h1>Cart</h1>
+{% if not items %}
+<p>Your cart is empty.</p>
+{% else %}
 <table class="table">
-  <thead><tr><th>Item</th><th>Qty</th><th class="text-end">Subtotal</th></tr></thead>
+  <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Subtotal</th></tr></thead>
   <tbody>
-  {% for p,qty in items %}
-  <tr>
-    <td>{{ p.name }}</td>
-    <td>{{ qty }}</td>
-    <td class="text-end">${{ '%.2f'|format(p.price*qty) }}</td>
-  </tr>
-  {% endfor %}
+    {% for prod,qty in items %}
+    <tr>
+      <td>{{ prod.name }}</td>
+      <td>{{ qty }}</td>
+      <td>{{ prod.currency }} {{ '%.2f'|format(prod.price) }}</td>
+      <td>{{ prod.currency }} {{ '%.2f'|format(prod.price*qty) }}</td>
+    </tr>
+    {% endfor %}
   </tbody>
-  <tfoot>
-    <tr><th colspan="2" class="text-end">Total</th><th class="text-end">${{ '%.2f'|format(total) }}</th></tr>
-  </tfoot>
 </table>
-<div class="text-end">
-  <a href="/checkout" class="btn btn-success" onclick="window.demopixel && window.demopixel.track('InitiateCheckout')">Checkout</a>
+<div class="d-flex justify-content-between">
+  <a href="/" class="btn btn-outline-secondary">Continue Shopping</a>
+  <a href="/checkout" class="btn btn-primary">Checkout</a>
 </div>
+{% endif %}
 {% endblock %}

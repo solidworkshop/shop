@@ -1,81 +1,117 @@
-from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify, make_response
+import math, random, uuid, time, json
 from datetime import datetime
-import uuid, json
+from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify
+from sqlalchemy import func
+from config import Config
 from extensions import db
-from models import Product, EventLog, Counters
+from models import Product, Counters, KVStore, EventLog
 
 shop_bp = Blueprint("shop", __name__)
 
-def cart_get(): return session.get("cart", {})
-def cart_set(c): session["cart"] = c
+def fmt_currency(value, currency="USD", locale="en_US"):
+    return f"{currency} {value:,.2f}"
+
+def ensure_seed_products():
+    if Product.query.count() == 0:
+        import random as _r
+        for i in range(1, 12+1):
+            p = Product(
+                sku=f"SKU{i:03d}",
+                name=f"Product {i}",
+                description="A demo product for the store simulator.",
+                price=round(_r.uniform(10, 99), 2),
+                currency="USD",
+                image_url="https://picsum.photos/seed/{}/600/400".format(i),
+            )
+            db.session.add(p)
+        db.session.commit()
+
+@shop_bp.before_app_request
+def _seed():
+    ensure_seed_products()
+    Counters.get_or_create()
 
 @shop_bp.route("/")
 def home():
-    try:
-        products = Product.query.order_by(Product.id.asc()).all()
-    except Exception as e:
-        products = []
-    return render_template("shop/home.html", products=products)
+    products = Product.query.all()
+    return render_template("shop/home.html", products=products, cfg=Config)
 
-@shop_bp.route("/product/<slug>")
-def product_detail(slug):
-    try:
-        p = Product.query.filter_by(slug=slug).first()
-    except Exception:
-        p = None
-    if not p:
-        return render_template('shop/404.html'), 404
-    return render_template("shop/product_detail.html", p=p)
+@shop_bp.route("/product/<sku>")
+def product_detail(sku):
+    p = Product.query.filter_by(sku=sku).first_or_404()
+    return render_template("shop/product.html", p=p, cfg=Config)
 
 @shop_bp.route("/cart")
 def cart():
-    cart = cart_get(); items=[]; total=0.0
-    for pid,qty in cart.items():
-        p = db.session.get(Product, int(pid))
-        if not p: continue
-        items.append((p,qty)); total += p.price*qty
-    return render_template("shop/cart.html", items=items, total=total)
+    cart = session.get("cart", {})
+    items, total = [], 0.0
+    for sku, qty in cart.items():
+        prod = Product.query.filter_by(sku=sku).first()
+        if prod:
+            items.append((prod, qty))
+            total += prod.price * qty
+    return render_template("shop/cart.html", items=items, total=total, fmt=fmt_currency, cfg=Config)
 
-@shop_bp.route("/add-to-cart/<int:pid>", methods=["POST"])
-def add_to_cart(pid):
-    cart = cart_get(); cart[str(pid)] = cart.get(str(pid),0) + 1; cart_set(cart)
+@shop_bp.route("/add_to_cart/<sku>")
+def add_to_cart(sku):
+    cart = session.get("cart", {})
+    cart[sku] = cart.get(sku, 0) + 1
+    session["cart"] = cart
+    session.modified = True
     return redirect(url_for("shop.cart"))
 
-@shop_bp.route("/checkout", methods=["GET","POST"])
+@shop_bp.route("/checkout", methods=["GET", "POST"])
 def checkout():
-    cart = cart_get()
-    if request.method=="POST":
+    cart = session.get("cart", {})
+    items, total = [], 0.0
+    for sku, qty in cart.items():
+        prod = Product.query.filter_by(sku=sku).first()
+        if prod:
+            items.append((prod, qty))
+            total += prod.price * qty
+
+    if request.method == "POST":
         session["cart"] = {}
-        return render_template("shop/thanks.html")
-    items=[]; total=0.0
-    for pid,qty in cart.items():
-        p = db.session.get(Product, int(pid))
-        if not p: continue
-        items.append((p,qty)); total += p.price*qty
-    return render_template("shop/checkout.html", items=items, total=total)
+        session.modified = True
+        return redirect(url_for("shop.thankyou"))
+    return render_template("shop/checkout.html", items=items, total=total, fmt=fmt_currency, cfg=Config)
+
+@shop_bp.route("/thank-you")
+def thankyou():
+    return render_template("shop/thankyou.html", cfg=Config)
 
 @shop_bp.route("/about")
-def about(): return render_template("shop/about.html")
+def about():
+    return render_template("shop/about.html", cfg=Config)
 
 @shop_bp.route("/faq")
-def faq(): return render_template("shop/faq.html")
+def faq():
+    return render_template("shop/faq.html", cfg=Config)
 
 @shop_bp.route("/contact")
-def contact(): return render_template("shop/contact.html")
+def contact():
+    return render_template("shop/contact.html", cfg=Config)
 
-@shop_bp.route("/robots.txt")
-def robots():
-    resp = make_response("User-agent: *\nDisallow: /\n"); resp.headers["Content-Type"]="text/plain"; return resp
-
-@shop_bp.route("/beacon", methods=["POST"])
-def beacon():
+# -------- Pixel beacon collector (client JS sends navigator.sendBeacon/fetch) --------
+@shop_bp.route("/pixel-collect", methods=["POST"])
+def pixel_collect():
     try:
-        data = request.get_json(silent=True) or {}
-        ev = EventLog(ts=datetime.utcnow(), channel="pixel",
-                      event_name=data.get("event_name","?"),
-                      event_id=data.get("event_id", str(uuid.uuid4())),
-                      status="ok", latency_ms=0, payload=json.dumps(data))
-        db.session.add(ev); c = Counters.get_or_create(); c.pixel += 1; db.session.commit()
-        return jsonify({"ok":True})
+        start = time.time()
+        payload = request.get_json(force=True, silent=True) or {}
+        eid = payload.get("event_id") or str(uuid.uuid4())
+        event_name = payload.get("event_name","PageView")
+        latency = int((time.time()-start)*1000)
+        ev = EventLog(ts=datetime.utcnow(), channel="pixel", event_name=event_name,
+                      event_id=eid, status="beacon", latency_ms=latency, payload=json.dumps(payload))
+        db.session.add(ev)
+        c = Counters.get_or_create()
+        c.pixel += 1
+        # dedup check
+        from models import EventLog as EL
+        dup = EL.query.filter_by(event_id=eid, channel="capi").first()
+        if dup:
+            c.dedup += 1
+        db.session.commit()
+        return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"ok":False,"error":str(e)}),500
+        return jsonify({"ok": False, "error": str(e)[:200]}), 400

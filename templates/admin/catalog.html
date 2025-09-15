@@ -1,34 +1,32 @@
-
-{% extends 'admin/layout.html' %}
-{% block body %}
-<div class="container py-4" style="max-width:950px">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h4 class="mb-0">Catalog</h4>
-    <a href="/" class="btn btn-outline-secondary btn-sm">← Back to store</a>
-  </div>
-  <div class="row g-3">
-    {% for p in products %}
-    <div class="col-12">
-      <form class="card p-3" method="post" action="{{ url_for('admin.admin_catalog_save') }}">
-        <input type="hidden" name="id" value="{{ p.id }}"/>
-        <div class="row g-2">
-          <div class="col-md-2"><label class="form-label small">SKU</label><input name="sku" class="form-control" value="{{ p.sku or '' }}"/></div>
-          <div class="col-md-2"><label class="form-label small">Slug</label><input name="slug" class="form-control" value="{{ p.slug or '' }}"/></div>
-          <div class="col-md-4"><label class="form-label small">Name</label><input name="name" class="form-control" value="{{ p.name or '' }}"/></div>
-          <div class="col-md-2"><label class="form-label small">Price</label><input name="price" type="number" step="0.01" class="form-control" value="{{ p.price or 0 }}"/></div>
-          <div class="col-md-2"><label class="form-label small">Cost</label><input name="cost" type="number" step="0.01" class="form-control" value="{{ p.cost or 0 }}"/></div>
-          <div class="col-md-2"><label class="form-label small">Currency</label><input name="currency" class="form-control" value="{{ p.currency or 'USD' }}"/></div>
-          <div class="col-md-4"><label class="form-label small">Image URL</label><input name="image_url" class="form-control" value="{{ p.image_url or '' }}"/></div>
-          <div class="col-12"><label class="form-label small">Description (HTML allowed)</label>
-            <textarea name="description" rows="3" class="form-control">{{ p.description or '' }}</textarea>
-          </div>
-          <div class="col-12 d-flex justify-content-end">
-            <button class="btn btn-primary btn-sm">Save</button>
-          </div>
-        </div>
-      </form>
-    </div>
+{% extends "base.html" %}
+{% block content %}
+<h1>Catalog Management</h1>
+<form class="row g-2 mb-3" method="post">
+  <input type="hidden" name="action" value="add">
+  <div class="col-md-2"><input name="sku" placeholder="SKU" class="form-control" required></div>
+  <div class="col-md-4"><input name="name" placeholder="Name" class="form-control" required></div>
+  <div class="col-md-2"><input name="price" placeholder="Price" class="form-control" type="number" step="0.01" required></div>
+  <div class="col-md-2"><input name="currency" placeholder="Currency" class="form-control" value="USD"></div>
+  <div class="col-md-2"><button class="btn btn-primary w-100">Add</button></div>
+</form>
+<table class="table table-sm">
+  <thead><tr><th>SKU</th><th>Name</th><th>Price</th><th>Currency</th><th></th></tr></thead>
+  <tbody>
+    {% for p in items %}
+    <tr>
+      <td>{{ p.sku }}</td>
+      <td>{{ p.name }}</td>
+      <td>{{ p.price }}</td>
+      <td>{{ p.currency }}</td>
+      <td>
+        <form method="post" class="d-inline">
+          <input type="hidden" name="action" value="delete">
+          <input type="hidden" name="sku" value="{{ p.sku }}">
+          <button class="btn btn-outline-danger btn-sm">Delete</button>
+        </form>
+      </td>
+    </tr>
     {% endfor %}
-  </div>
-</div>
+  </tbody>
+</table>
 {% endblock %}

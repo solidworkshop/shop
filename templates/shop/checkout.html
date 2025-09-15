@@ -1,20 +1,15 @@
-{% extends 'shop/base.html' %}
+{% extends "base.html" %}
 {% block content %}
-<h3>Checkout</h3>
-<p>Enter fake details and click Pay.</p>
-<form method="POST" onsubmit="window.demopixel && window.demopixel.track('AddPaymentInfo')">
-  <div class="row g-3">
-    <div class="col-md-6">
-      <label class="form-label">Name</label>
-      <input class="form-control" required>
-    </div>
-    <div class="col-md-6">
-      <label class="form-label">Email (optional)</label>
-      <input id="email" class="form-control">
-    </div>
-    <div class="col-12">
-      <button class="btn btn-primary" onclick="window.demopixel && window.demopixel.track('Purchase',{value:99.0,currency:'USD'})">Pay $99.00</button>
-    </div>
+<h1>Checkout</h1>
+<form method="post">
+  <div class="mb-3">
+    <label class="form-label">Name</label>
+    <input class="form-control" required>
   </div>
+  <div class="mb-3">
+    <label class="form-label">Email</label>
+    <input type="email" class="form-control" required>
+  </div>
+  <button class="btn btn-success">Place Order</button>
 </form>
 {% endblock %}

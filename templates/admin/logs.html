@@ -1,20 +1,18 @@
-
-{% extends 'admin/layout.html' %}
-{% block body %}
-<div class="container py-4" style="max-width:1000px">
-  <h4 class="mb-3">Logs</h4>
-  <table class="table table-sm table-striped">
-    <thead><tr><th>When</th><th>Chan</th><th>Event</th><th>event_id</th><th>Status</th><th>Latency</th><th>Error</th></tr></thead>
+{% extends "base.html" %}
+{% block content %}
+<h1>Event Logs</h1>
+<div class="table-responsive">
+  <table class="table table-sm">
+    <thead><tr><th>Time</th><th>Channel</th><th>Event</th><th>event_id</th><th>Status</th><th>Latency</th></tr></thead>
     <tbody>
-      {% for r in rows %}
+      {% for r in logs %}
       <tr>
-        <td class="small text-muted">{{ r.ts.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+        <td>{{ r.ts }}</td>
         <td>{{ r.channel }}</td>
         <td>{{ r.event_name }}</td>
-        <td class="small">{{ r.event_id }}</td>
+        <td class="text-truncate" style="max-width:320px">{{ r.event_id }}</td>
         <td>{{ r.status }}</td>
-        <td>{{ r.latency_ms }} ms</td>
-        <td class="small text-danger">{{ r.error }}</td>
+        <td>{{ r.latency_ms }}ms</td>
       </tr>
       {% endfor %}
     </tbody>
