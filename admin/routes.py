@@ -36,8 +36,19 @@ def counters_snapshot():
           SELECT event_id FROM event_log WHERE channel='capi' AND status='ok' GROUP BY event_id
         ) sub
     """)).scalar() or 0
-    with_margin = db.session.execute(text("SELECT COUNT(*) FROM event_log WHERE payload LIKE '%"profit_margin"%'" )).scalar() or 0
-    with_pltv = db.session.execute(text("SELECT COUNT(*) FROM event_log WHERE payload LIKE '%"pltv"%'" )).scalar() or 0
+
+# events whose JSON payload contains "profit_margin"
+with_margin = db.session.execute(
+    text("SELECT COUNT(*) FROM event_log WHERE payload LIKE :q"),
+    {"q": '%"profit_margin"%'}
+).scalar() or 0
+
+# events whose JSON payload contains "pltv" (adjust to your key if needed)
+with_pltv = db.session.execute(
+    text("SELECT COUNT(*) FROM event_log WHERE payload LIKE :q"),
+    {"q": '%"pltv"%'}
+).scalar() or 0
+    
     return {"pixel": px, "capi": cp, "deduped": int(deduped), "margin_events": int(with_margin), "pltv_events": int(with_pltv)}
 
 # Dashboard
